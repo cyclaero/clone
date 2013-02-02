@@ -824,7 +824,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
 int main(int argc, const char *argv[])
 {
    if (argc != 3)
-      printf("File system cloning by Dr. Rolf Jansen\nCyclaero Ltda. (c) 2013 - %s\nUsage:  clone source destination\n\n", svnrev);
+      printf("File tree cloning by Dr. Rolf Jansen\nCyclaero Ltda. (c) 2013 - %s\nUsage:  clone source destination\n\n", svnrev);
 
    else
    {
@@ -913,7 +913,7 @@ int main(int argc, const char *argv[])
             *(short *)&src[sl++] = *(short *)"/";
          if (dst[dl-1] != '/')
             *(short *)&dst[dl++] = *(short *)"/";
-         printf("File system cloning by Dr. Rolf Jansen\nCyclaero Ltda. (c) 2013 - %s\n\nclone %s %s\n", svnrev, src, dst);
+         printf("File tree cloning by Dr. Rolf Jansen\nCyclaero Ltda. (c) 2013 - %s\n\nclone %s %s\n", svnrev, src, dst);
 
          putc('.', stdout); fflush(stdout);
          clone(src, sl, dst, dl);
