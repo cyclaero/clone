@@ -823,13 +823,12 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
 
 int main(int argc, const char *argv[])
 {
-   struct stat sstat, dstat;
-
    if (argc != 3)
       printf("File system cloning by Dr. Rolf Jansen\nCyclaero Ltda. (c) 2013 - %s\nUsage:  clone source destination\n\n", svnrev);
 
    else
    {
+      // 1. check whether to deal with paths in the home directory
       size_t homelen = 0;
       char  *usrhome;
       bool   stilde = *(short *)argv[1] == *(short *)"~/";
@@ -842,9 +841,8 @@ int main(int argc, const char *argv[])
 
       size_t as = strlen(argv[1]), sl = (stilde) ? homelen + as - 1 : as;
       size_t ad = strlen(argv[2]), dl = (dtilde) ? homelen + ad - 1 : ad;
-
-      char src[sl+2], dst[dl+2];
-
+      char   src[sl+2];
+      char   dst[dl+2];
       if (stilde)
       {
          strcpy(src, usrhome);
@@ -861,6 +859,8 @@ int main(int argc, const char *argv[])
       else
          strcpy(dst, argv[2]);
 
+      // 2. check whether the paths do exist and lead to directories
+      struct stat sstat, dstat;
       if (stat(src, &sstat) != no_error)
          printf("The source directory %s does not exist.\n", argv[1]);
 
@@ -900,13 +900,13 @@ int main(int argc, const char *argv[])
          if (rc = pthread_create(&reader_thread, &thread_attrib, reader, NULL))
          {
             printf("Cannot create file reader thread: %d.", rc);
-            exit(EXIT_FAILURE);
+            return 1;
          }
 
          if (rc = pthread_create(&writer_thread, &thread_attrib, writer, NULL))
          {
             printf("Cannot create file writer thread: %d.", rc);
-            exit(EXIT_FAILURE);
+            return 1;
          }
 
          if (src[sl-1] != '/')
@@ -928,8 +928,10 @@ int main(int argc, const char *argv[])
          double t = t1.tv_sec - t0.tv_sec + (t1.tv_usec - t0.tv_usec)/1.0e6;
          gTotalSize /= 1048576.0;
          printf("\n%.1f MB in %.2f s -- %.1f MB/s\n\n", gTotalSize, t, gTotalSize/t);
+
+         return 0;
       }
    }
 
-   return 0;
+   return 1;
 }
