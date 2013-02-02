@@ -1,8 +1,6 @@
-# Makefile for clone
+# Makefile for clone(1)
 #
 # Created by Dr. Rolf Jansen on 2013-01-13.
-# Copyright (c) 2013 Cyclaero Ltda.
-# All rights reserved.
 # Copyright (c) 2013 Cyclaero Ltda.
 # All rights reserved.
 #
@@ -59,3 +57,4 @@ update: clean
 
 install: $(TOOL)
 	strip -x -o /usr/local/bin/$(TOOL) $(TOOL)
+	cp $(TOOL).1 /usr/local/man/man1/$(TOOL).1
