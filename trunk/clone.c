@@ -53,18 +53,17 @@ static const char *svnrev = "(r"STRINGIFY(SVNREV)")";
 #define dst_error +errno
 
 
-dev_t  gSrcDev;
-llong  gWriterLast = 0;
-
 bool   gRunning    = true;
-
 bool   gQItemWait  = false;
 bool   gChunkWait  = false;
 bool   gReaderWait = false;
 bool   gWriterWait = false;
 bool   gLevelWait  = false;
 
+dev_t  gSourceDev;
+llong  gWriterLast = 0;
 double gTotalSize  = 0.0;
+Node **gLinkINodes = NULL;
 
 pthread_t       reader_thread;
 pthread_t       writer_thread;
@@ -588,14 +587,12 @@ int atomCopy(char *src, char *dst, struct stat *st)
 }
 
 
-Node **gLinkInodes = NULL;
-
-int hlnkCopy(char *src, char *dst, struct stat *st)
+int hlnkCopy(char *src, char *dst, size_t dl, struct stat *st)
 {
    int    rc;
-   Node  *ino = findTableEntry(gLinkInodes, st->st_ino);
+   Node  *ino = findINode(gLinkINodes, st->st_ino);
 
-   if (ino && st->st_dev == ino->dev)
+   if (ino && ino->value.i == st->st_dev)
    {
       chflags(ino->name, 0);
       rc = (link(ino->name, dst) == no_error) ? 0 : dst_error;
@@ -603,7 +600,7 @@ int hlnkCopy(char *src, char *dst, struct stat *st)
 
    else
    {
-      addTableEntry(gLinkInodes, st->st_ino, dst, st->st_dev);
+      storeINode(gLinkINodes, st->st_ino, dst, dl, st->st_dev);
       rc = atomCopy(src, dst, st);
    }
 
@@ -694,13 +691,13 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
           llong  lastID = 0;
           llong  fCount = 0;
 
-   DIR          *dp;
+   DIR          *sdp;
    struct dirent bep, *ep;
    struct stat   st;
 
-   if (dp = opendir(src))
+   if (sdp = opendir(src))
    {
-      while (readdir_r(dp, &bep, &ep) == no_error && ep)
+      while (readdir_r(sdp, &bep, &ep) == no_error && ep)
       {
          // next source and destination paths
          size_t  nsl = sl + ep->d_namlen;  // next source length
@@ -750,7 +747,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                {
                   putc('.', stdout); fflush(stdout);
                   *(short *)&nsrc[nsl++] = *(short *)&ndst[ndl++] = *(short *)"/";
-                  if (st.st_dev == gSrcDev)
+                  if (st.st_dev == gSourceDev)
                   {
                      clone(nsrc, nsl, ndst, ndl);
                      setAttributes(nsrc, ndst, &st);
@@ -786,7 +783,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
 
                   else
                   {
-                     if (hlnkCopy(nsrc, ndst, &st) != no_error)
+                     if (hlnkCopy(nsrc, ndst, ndl, &st) != no_error)
                         printf("\nCopying file or hard link %s from %s to %s failed.\n", ep->d_name, src, dst);
                   }
 
@@ -804,7 +801,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
          }
       }
 
-      closedir(dp);
+      closedir(sdp);
 
       if (fCount)
       {
@@ -880,8 +877,8 @@ int main(int argc, const char *argv[])
          struct timeval t0, t1;
          gettimeofday(&t0, NULL);
 
-         gSrcDev = sstat.st_dev;
-         gLinkInodes = createTable(8192);
+         gSourceDev  = sstat.st_dev;
+         gLinkINodes = createTable(8192);
 
          // Initialze the dispensers
          for (i = 0; i < maxChunkCount; i++)
@@ -922,7 +919,7 @@ int main(int argc, const char *argv[])
          gRunning = false;
          pthread_cond_signal(&reader_cond);
          pthread_cond_signal(&writer_cond);
-         freeTable(gLinkInodes);
+         releaseTable(gLinkINodes);
 
          gettimeofday(&t1, NULL);
          double t = t1.tv_sec - t0.tv_sec + (t1.tv_usec - t0.tv_usec)/1.0e6;

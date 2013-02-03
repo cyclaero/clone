@@ -92,12 +92,44 @@ void freeMetaData(ExtMetaData *xmd);
 
 #pragma mark ••• AVL Tree •••
 
+#pragma mark ••• Value Data Types •••
+
+// Data Types in the key/name-value store -- negative values are dynamic.
+enum 
+{
+   dynamic    = -1,  // multiply kind with -1 if the data has been dynamically allocated
+   Empty      =  0,  // the key is the data
+   Simple     =  1,  // boolean, integer, floating point, etc. values
+   Data       =  2,  // any kind of structured or unstructured data
+   String     =  3,  // a nul terminated string
+   Dictionary =  5,  // a dictionary table, i.e. another key/name-value store
+};
+
+typedef struct
+{
+   long    kind;  // negative kinds indicate dynamically allocated data
+   union
+   {
+      bool    b;  // a boolean value
+      long    i;  // an integer
+      double  d;  // a floating point number
+      time_t  t;  // a time stamp
+      char   *s;  // a string
+      void   *p;  // a pointer to anything
+   };
+} Value;
+
+void releaseValue(Value *value);
+
+
 typedef struct Node
 {
-   // payload
-   ulong  key;
-   char  *name;
-   int    dev;
+   // keys
+   ulong  key;    // if this is zero, then
+   char  *name;   // use name as the key.
+
+   // value
+   Value  value;
 
    // house holding
    int          B;
@@ -105,16 +137,23 @@ typedef struct Node
 } Node;
 
 
-Node *findTreeNode(ulong key, Node  *node);
-int    addTreeNode(ulong key, const char *name, int dev, Node **node, Node **passed);
-int removeTreeNode(ulong key, Node **node);
-void      freeTree(Node *node);
+// CAUTION: It is an error to call these functions with key being 0 AND name being NULL.
+//          Either of both must be non-zero. No error cheking is done within these recursive functions.
+Node *findTreeNode(ulong key, const char *name, Node  *node);
+int    addTreeNode(ulong key, const char *name, size_t namlen, Value *value, Node **node, Node **passed);
+int removeTreeNode(ulong key, const char *name, Node **node);
+void   releaseTree(Node *node);
 
 
-#pragma mark ••• Hash Table •••
+#pragma mark ••• Hash Tables •••
 
-Node    **createTable(uint n);
-Node  *findTableEntry(Node *table[], ulong key);
-Node   *addTableEntry(Node *table[], ulong key, const char *name, int dev);
-void removeTableEntry(Node *table[], ulong key);
-void        freeTable(Node *table[]);
+Node **createTable(uint n);
+void  releaseTable(Node *table[]);
+
+Node    *findINode(Node *table[], ulong key);
+Node   *storeINode(Node *table[], ulong key, const char *fsname, size_t namlen, long dev);
+void   removeINode(Node *table[], ulong key);
+
+Node   *findFSName(Node *table[], const char *fsname, size_t namlen);
+Node  *storeFSName(Node *table[], const char *fsname, size_t namlen, long dev);
+void  removeFSName(Node *table[], const char *fsname, size_t namlen);
