@@ -25,9 +25,13 @@
 //  THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
-#define  no_error  0
-#define bad_error -1
-#define sys_error -2
+#define errStrLen   256
+
+#define  NO_ERROR   0
+#define SRC_ERROR   -errno       // negative errors indicate a problem with the source.
+#define DST_ERROR   +errno       // positive errors indicate a problem with the destination.
+#define INVALIDATED (void *)-1   // marker for an invalidated pointer
+
 
 #define ENQUOTING(cvar) #cvar
 #define STRINGIFY(cvar) ENQUOTING(cvar)

@@ -46,13 +46,6 @@
 
 static const char *svnrev = "(r"STRINGIFY(SVNREV)")";
 
-// negative errors indicate a problem with the source.
-#define src_error -errno
-
-// positive errors indicate a problem with the destination.
-#define dst_error +errno
-
-
 bool   gRunning    = true;
 bool   gQItemWait  = false;
 bool   gChunkWait  = false;
@@ -292,6 +285,8 @@ int atomCopy(char *src, char *dst, struct stat *st);
 
 void *reader(void *threadArg)
 {
+   static char errorString[errStrLen];
+
    while (gRunning)
    {
       QItem *qitem;
@@ -321,7 +316,7 @@ void *reader(void *threadArg)
          if (read(in, chunk->buffer, headsize) == headsize)
          {
             chunk->state = (n == 0) ? final : ready;
-            chunk->rc    = no_error;
+            chunk->rc    = NO_ERROR;
             chunk->size  = headsize;
          }
 
@@ -331,9 +326,10 @@ void *reader(void *threadArg)
             // message, and set the chunk size to 0, so
             // the writer can resolve the issue.
             chunk->state = final;
-            chunk->rc    = src_error;
+            chunk->rc    = SRC_ERROR;
             chunk->size  = 0;
-            printf("\nRead error on file %s: %d.\n", qitem->src, chunk->rc);
+            strerror_r(abs(chunk->rc), errorString, errStrLen);
+            printf("\nRead error on file %s: %s.\n", qitem->src, errorString);
          }
 
          pthread_mutex_lock(&writer_mutex);
@@ -343,13 +339,13 @@ void *reader(void *threadArg)
          pthread_mutex_unlock(&writer_mutex);
 
          // the continuation chunks if any
-         for (i = 1; i <= n && chunk->rc == no_error; i++)
+         for (i = 1; i <= n && chunk->rc == NO_ERROR; i++)
          {
             chunk = dispenseEmptyChunk();
             if (read(in, chunk->buffer, blcksize) == blcksize)
             {
                chunk->state = (n == i) ? final : ready;
-               chunk->rc    = no_error;
+               chunk->rc    = NO_ERROR;
                chunk->size  = blcksize;
             }
 
@@ -359,9 +355,10 @@ void *reader(void *threadArg)
                // Perhaps it is already waiting for the next chunk,
                // and therefore the processe may not be stopped here.
                chunk->state = final;
-               chunk->rc    = src_error;
+               chunk->rc    = SRC_ERROR;
                chunk->size  = 0;
-               printf("\nRead error on file %s: %d.\n", qitem->src, chunk->rc);
+               strerror_r(abs(chunk->rc), errorString, errStrLen);
+               printf("\nRead error on file %s: %s.\n", qitem->src, errorString);
             }
 
             pthread_mutex_lock(&writer_mutex);
@@ -376,14 +373,16 @@ void *reader(void *threadArg)
       else
       {
          // Most probably, the file has been deleted after it was scheduled for copying.
-         // Drop a message, release any allocated memory, mark the queue item invalid,
-         // so the writer does ignore it.
-         printf("\nFile #%lld, %s could not be opened for reading: %d.\n", qitem->fid, qitem->src, src_error);
+         // Drop a message, release any allocated memory, invalidate the queue items chunk,
+         // so the writer does skip this one.
+         strerror_r(errno, errorString, errStrLen);
+         printf("\nFile %s could not be opened for reading: %s.\n", qitem->src, errorString);
 
-         gWriterLast = qitem->fid;
-         qitem->fid = -1;
-         free(qitem->src);
-         free(qitem->dst);
+         pthread_mutex_lock(&writer_mutex);
+         qitem->chunk = INVALIDATED;
+         if (gWriterWait)
+            pthread_cond_signal(&writer_cond);
+         pthread_mutex_unlock(&writer_mutex);
       }
    }
 
@@ -393,6 +392,8 @@ void *reader(void *threadArg)
 
 void *writer(void *threadArg)
 {
+   static char errorString[errStrLen];
+
    while (gRunning)
    {
       QItem *pqitem, qitem;
@@ -416,8 +417,8 @@ void *writer(void *threadArg)
          pthread_cond_signal(&reader_cond);
       pthread_mutex_unlock(&reader_mutex);
 
-      if (qitem.fid == -1)                            // skipping invalidated queue items
-         continue;
+      if (qitem.chunk == INVALIDATED) // check for an invalidated chunk pointer
+         goto finish;                 // skip writing
 
       CopyChunk *chunk = qitem.chunk;
 
@@ -426,13 +427,13 @@ void *writer(void *threadArg)
       {
          // fnocache(out);
 
-         int state, rc = no_error;
+         int state, rc = NO_ERROR;
 
          do
          {
             state = chunk->state;
 
-            if (chunk->rc != no_error)
+            if (chunk->rc != NO_ERROR)
                rc = chunk->rc;
 
             else if (write(out, chunk->buffer, chunk->size) == chunk->size)
@@ -454,15 +455,15 @@ void *writer(void *threadArg)
 
             else
             {
-               rc = dst_error;
-               printf("\nWrite error on file %s: %d.\n", qitem.dst, rc);
+               strerror_r(abs(rc = DST_ERROR), errorString, errStrLen);
+               printf("\nWrite error on file %s: %s.\n", qitem.dst, errorString);
             }
 
-         } while (state != final && rc == no_error);
+         } while (state != final && rc == NO_ERROR);
 
          close(out);
 
-         if (rc == no_error)
+         if (rc == NO_ERROR)
             gTotalSize += qitem.st.st_size;
 
          else
@@ -488,11 +489,14 @@ void *writer(void *threadArg)
          }
 
          // Error check again -- the atomic file copy may have resolved a previous issue
-         if (rc == no_error)
+         if (rc == NO_ERROR)
             setAttributes(qitem.src, qitem.dst, &qitem.st);
 
          else
-            printf("\nFile %s could not be copied to %s: %d.\n", qitem.src, qitem.dst, rc);
+         {
+            strerror_r(abs(rc), errorString, errStrLen);
+            printf("\nFile %s could not be copied to %s: %s.\n", qitem.src, qitem.dst, errorString);
+         }
 
          free(qitem.src);
          free(qitem.dst);
@@ -501,7 +505,8 @@ void *writer(void *threadArg)
       else
       {
          // Drop a message, remove the file from the queue, and clean-up without further notice.
-         printf("\nFile %s could not be opened for writing: %d.\n", qitem.dst, dst_error);
+         strerror_r(errno, errorString, errStrLen);
+         printf("\nFile %s could not be opened for writing: %s.\n", qitem.dst, errorString);
 
          free(qitem.src);
          free(qitem.dst);
@@ -526,6 +531,7 @@ void *writer(void *threadArg)
          } while (state != final);
       }
 
+   finish:
       pthread_mutex_lock(&level_mutex);
       gWriterLast = qitem.fid;
       if (gLevelWait)
@@ -539,7 +545,7 @@ void *writer(void *threadArg)
 
 int atomCopy(char *src, char *dst, struct stat *st)
 {
-   int    in, out, rc = no_error;
+   int    in, out, rc = NO_ERROR;
    size_t filesize = st->st_size;
 
    if ((in = open(src, O_RDONLY)) != -1)
@@ -555,17 +561,17 @@ int atomCopy(char *src, char *dst, struct stat *st)
             uint i, n = (uint)(filesize/blcksize);
             char *buffer = malloc(blcksize);
 
-            for (i = 0; i < n && rc == no_error; i++)
+            for (i = 0; i < n && rc == NO_ERROR; i++)
                if (read(in, buffer, blcksize) != blcksize)
-                  rc = src_error;
+                  rc = SRC_ERROR;
                else if (write(out, buffer, blcksize) != blcksize)
-                  rc = dst_error;
+                  rc = DST_ERROR;
 
-            if (tailsize && rc == no_error)
+            if (tailsize && rc == NO_ERROR)
                if (read(in, buffer, tailsize) != tailsize)
-                  rc = src_error;
+                  rc = SRC_ERROR;
                else if (write(out, buffer, tailsize) != tailsize)
-                  rc = dst_error;
+                  rc = DST_ERROR;
 
             free(buffer);
          }
@@ -579,11 +585,11 @@ int atomCopy(char *src, char *dst, struct stat *st)
       else  // !out
       {
         close(in);
-        return dst_error;
+        return DST_ERROR;
       }
 
    else     // !in
-      return src_error;
+      return SRC_ERROR;
 }
 
 
@@ -595,7 +601,7 @@ int hlnkCopy(char *src, char *dst, size_t dl, struct stat *st)
    if (ino && ino->value.i == st->st_dev)
    {
       chflags(ino->name, 0);
-      rc = (link(ino->name, dst) == no_error) ? 0 : dst_error;
+      rc = (link(ino->name, dst) == NO_ERROR) ? 0 : DST_ERROR;
    }
 
    else
@@ -604,7 +610,7 @@ int hlnkCopy(char *src, char *dst, size_t dl, struct stat *st)
       rc = atomCopy(src, dst, st);
    }
 
-   if (rc == no_error)
+   if (rc == NO_ERROR)
       setAttributes(src, dst, st);
 
    free(src);
@@ -614,12 +620,22 @@ int hlnkCopy(char *src, char *dst, size_t dl, struct stat *st)
 }
 
 
-void fileEmpty(char *src, char *dst, struct stat *st)
+int fileEmpty(char *src, char *dst, struct stat *st)
 {
-   close(open(dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, st->st_mode & ALLPERMS));
-   setAttributes(src, dst, st);
+   int rc;
+   int out = open(dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, st->st_mode & ALLPERMS);
+   if (out != -1)
+   {
+      close(out);
+      setAttributes(src, dst, st);
+      rc = NO_ERROR;
+   }
+   else
+      rc = DST_ERROR;
+
    free(src);
    free(dst);
+   return rc;
 }
 
 
@@ -639,12 +655,12 @@ void fileCopy(llong fid, char *src, char *dst, struct stat *st)
 
 int slnkCopy(char *src, char *dst)
 {
-   int    rc = no_error;
+   int    rc = NO_ERROR;
    char  *revpath = NULL;
    size_t revlen, maxlen = 1024;
    struct stat st;
 
-   if (lstat(src, &st) == no_error)
+   if (lstat(src, &st) == NO_ERROR)
    {
       // 1. reveal the path pointed to by the link
       revpath = malloc(maxlen);
@@ -656,14 +672,14 @@ int slnkCopy(char *src, char *dst)
          else
          {
             revpath = NULL;      // if the length of the path to be revealed does'nt fit yet
-            rc = -sys_error;     // into 1 MB, then there is something screwed in our system
+            rc = -1;             // into 1 MB, then there is something screwed in our system
             goto cleanup;
          }
       }
 
       if (revlen == -1)
       {
-         rc = src_error;
+         rc = SRC_ERROR;
          goto cleanup;
       }
 
@@ -671,10 +687,10 @@ int slnkCopy(char *src, char *dst)
          revpath[revlen] = '\0';
 
       // 2. create a new symlink at dst pointing to the revealed path
-      if (symlink(revpath, dst) == no_error)
+      if (symlink(revpath, dst) == NO_ERROR)
          setAttributes(src, dst, &st);
       else
-         rc = dst_error;
+         rc = DST_ERROR;
    }
 
 cleanup:
@@ -687,9 +703,8 @@ cleanup:
 
 void clone(const char *src, size_t sl, const char *dst, size_t dl)
 {
+   static char   errorString[errStrLen];
    static llong  fileID = 0;
-          llong  lastID = 0;
-          llong  fCount = 0;
 
    DIR          *sdp;
    struct dirent bep, *ep;
@@ -697,7 +712,11 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
 
    if (sdp = opendir(src))
    {
-      while (readdir_r(sdp, &bep, &ep) == no_error && ep)
+      int   rc;
+      llong lastID = 0;
+      llong fCount = 0;
+
+      while (readdir_r(sdp, &bep, &ep) == NO_ERROR && ep)
       {
          // next source and destination paths
          size_t  nsl = sl + ep->d_namlen;  // next source length
@@ -742,8 +761,8 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
             case DT_DIR:      //  4 - A directory.
                if ((ep->d_name[0] != '.' || (ep->d_name[1] != '\0' &&
                    (ep->d_name[1] != '.' ||  ep->d_name[2] != '\0')))
-                   && stat(nsrc, &st) == no_error
-                   && mkdir(ndst, st.st_mode & ALLPERMS) == no_error)
+                   && stat(nsrc, &st) == NO_ERROR
+                   && mkdir(ndst, st.st_mode & ALLPERMS) == NO_ERROR)
                {
                   putc('.', stdout); fflush(stdout);
                   *(short *)&nsrc[nsl++] = *(short *)&ndst[ndl++] = *(short *)"/";
@@ -767,7 +786,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                break;
 
             case DT_REG:      //  8 - A regular file.
-               if (stat(nsrc, &st) == no_error &&
+               if (stat(nsrc, &st) == NO_ERROR &&
                    strcmp(ep->d_name, ".sujournal") != 0)
                   if (st.st_nlink == 1)
                   {
@@ -778,13 +797,24 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                         fileCopy(fileID, nsrc, ndst, &st);
                      }
                      else
-                        fileEmpty(nsrc, ndst, &st);
+                     {
+                        rc = fileEmpty(nsrc, ndst, &st);
+                        if (rc != NO_ERROR)
+                        {
+                           strerror_r(abs(rc), errorString, errStrLen);
+                           printf("\nCreating file %s failed: %s.\n", ndst, errorString);
+                        }
+                     }
                   }
 
                   else
                   {
-                     if (hlnkCopy(nsrc, ndst, ndl, &st) != no_error)
-                        printf("\nCopying file or hard link %s from %s to %s failed.\n", ep->d_name, src, dst);
+                     rc = hlnkCopy(nsrc, ndst, ndl, &st);
+                     if (rc != NO_ERROR)
+                     {
+                        strerror_r(abs(rc), errorString, errStrLen);
+                        printf("\nCopying file or hard link %s from %s to %s failed: %s.\n", ep->d_name, src, dst, errorString);
+                     }
                   }
 
                else
@@ -795,8 +825,12 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                break;
 
             case DT_LNK:      // 10 - A symbolic link.
-               if (slnkCopy(nsrc, ndst) != no_error)
-                  printf("\nCopying symbolic link %s from %s to %s failed.\n", ep->d_name, src, dst);
+               rc = slnkCopy(nsrc, ndst);
+               if (rc != NO_ERROR)
+               {
+                  strerror_r(abs(rc), errorString, errStrLen);
+                  printf("\nCopying symbolic link %s from %s to %s failed: %s.\n", ep->d_name, src, dst, errorString);
+               }
                break;
          }
       }
@@ -858,14 +892,14 @@ int main(int argc, const char *argv[])
 
       // 2. check whether the paths do exist and lead to directories
       struct stat sstat, dstat;
-      if (stat(src, &sstat) != no_error)
+      if (stat(src, &sstat) != NO_ERROR)
          printf("The source directory %s does not exist.\n", argv[1]);
 
       else if ((sstat.st_mode & S_IFMT) != S_IFDIR)
          printf("Source %s is not a directory.\n", argv[1]);
 
-      else if (stat(dst, &dstat) != no_error &&
-               (mkdir(dst, sstat.st_mode & ALLPERMS) != no_error || stat(dst, &dstat) != no_error))
+      else if (stat(dst, &dstat) != NO_ERROR &&
+               (mkdir(dst, sstat.st_mode & ALLPERMS) != NO_ERROR || stat(dst, &dstat) != NO_ERROR))
          printf("The destination directory %s did not exist and a new one could not be created.\n", argv[2]);
 
       else if ((dstat.st_mode & S_IFMT) != S_IFDIR)
