@@ -286,6 +286,28 @@ void setAttributes(const char *src, const char *dst, struct stat *st)
 
 #pragma mark ••• AVL Tree •••
 
+#pragma mark ••• Value Data householding •••
+
+void releaseValue(Value *value)
+{
+   switch (-value->kind)   // dynamic data, has to be released
+   {
+      case Simple:
+      case Data:
+         free(value->p);
+         break;
+
+      case String:
+         free(value->s);
+         break;
+
+      case Dictionary:
+         releaseTable((Node **)value->p);
+         break;
+   }
+}
+
+
 static int balanceNode(Node **node)
 {
    int   change = 0;
@@ -352,14 +374,12 @@ static int balanceNode(Node **node)
 
 static int pickPrevNode(Node **node, Node **exch)
 {                                       // *exch on entry = parent node
-   int   change;                        // *exch on exit  = picked previous value node
-   Node *o = *node;
-   Node *p;
+   Node *o = *node;                     // *exch on exit  = picked previous value node
 
    if (o->R)
    {
       *exch = o;
-      change = -pickPrevNode(&o->R, exch);
+      int change = -pickPrevNode(&o->R, exch);
       if (change)
          if (abs(o->B += change) > 1)
             return balanceNode(node);
@@ -371,7 +391,7 @@ static int pickPrevNode(Node **node, Node **exch)
 
    else if (o->L)
    {
-      p    = o->L;
+      Node *p = o->L;
       o->L = NULL;
       (*exch)->R = p;
       *exch = o;
@@ -389,14 +409,12 @@ static int pickPrevNode(Node **node, Node **exch)
 
 static int pickNextNode(Node **node, Node **exch)
 {                                       // *exch on entry = parent node
-   int   change;                        // *exch on exit  = picked next value node
-   Node *o = *node;
-   Node *q;
+   Node *o = *node;                     // *exch on exit  = picked next value node
 
    if (o->L)
    {
       *exch = o;
-      change = +pickNextNode(&o->L, exch);
+      int change = +pickNextNode(&o->L, exch);
       if (change)
          if (abs(o->B += change) > 1)
             return balanceNode(node);
@@ -408,7 +426,7 @@ static int pickNextNode(Node **node, Node **exch)
 
    else if (o->R)
    {
-      q    = o->R;
+      Node *q = o->R;
       o->R = NULL;
       (*exch)->L = q;
       *exch = o;
@@ -424,151 +442,171 @@ static int pickNextNode(Node **node, Node **exch)
 }
 
 
-Node *findTreeNode(ulong key, Node *node)
+// CAUTION: It is an error to call these functions with key being 0 AND name being NULL.
+//          Either of both must be non-zero. No error cheking is done within these recursive functions.
+
+Node *findTreeNode(ulong key, const char *name, Node *node)
 {
-   long ord;
+   if (node)
+   {
+      int ord = (key) ? (int)(key - node->key) : strcmp(name, node->name);
 
-   if (!node || (ord = key - node->key) == 0)
-      return node;
+      if (ord == 0)
+         return node;
 
-   else if (ord < 0)
-      return findTreeNode(key, node->L);
+      else if (ord < 0)
+         return findTreeNode(key, name, node->L);
 
-   else // (ord > 0)
-      return findTreeNode(key, node->R);
+      else // (ord > 0)
+         return findTreeNode(key, name, node->R);
+   }
+
+   else
+      return NULL;
 }
 
-
-int addTreeNode(ulong key, const char *name, int dev, Node **node, Node **passed)
+int addTreeNode(ulong key, const char *name, size_t namlen, Value *value, Node **node, Node **passed)
 {
-   int   change = 0;
-   long  ord;
    Node *o = *node;
 
-   if (o == NULL)                                  // if the key is not in the tree
-   {                                               // then add it into a new leaf
+   if (o == NULL)                         // if the key is not in the tree
+   {                                      // then add it into a new leaf
       o = *node = *passed = calloc(1, sizeof(Node));
-      o->key  = key;
-      o->name = strcpy(malloc(strlen(name)+1), name);
-      o->dev  = dev;
-      return 1;                                    // put the weight of 1 leaf onto the balance
+      o->key = key;
+      o->name = strcpy(malloc(namlen+1), name);
+      if (value)
+         o->value = *value;
+      return 1;                           // add the weight of 1 leaf onto the balance
    }
 
-   else if ((ord = key - o->key) == 0)             // if the key is already in the tree then
-   {
-      *passed = o;                                 // report the passed node into which the new value has been entered
-      free(o->name);                               // release the old memory allocation and
-      o->name = strcpy(malloc(strlen(name)+1), name);
-      o->dev  = dev;
-      return 0;
-   }
-
-   else if (ord < 0)
-      change = -addTreeNode(key, name, dev, &o->L, passed);
-
-   else // (ord > 0)
-      change = +addTreeNode(key, name, dev, &o->R, passed);
-
-   if (change)
-      if (abs(o->B += change) > 1)
-         return 1 - balanceNode(node);
-      else
-         return o->B != 0;
    else
-      return 0;
-}
-
-
-int removeTreeNode(ulong key, Node **node)
-{
-   int    change = 0;
-   long   ord;
-   Node  *o = *node;
-
-   if (o == NULL)
-      return 0;                                    // not found -> recursively do nothing
-
-   else if ((ord = key - o->key) == 0)
    {
-      int    b = o->B;
-      Node  *p = o->L;
-      Node  *q = o->R;
+      int change;
+      int ord = (key) ? (int)(key - o->key) : strcmp(name, o->name);
 
-      if (!p || !q)
+      if (ord == 0)                       // if the key/name is already in the tree then
       {
-         free((*node)->name);
-         free(*node);
-         *node = (p > q) ? p : q;
-         return 1;                                // remove the weight of 1 leaf from the balance
+         *passed = o;                     // report back the passed node into which the new value has been entered
+         free(o->name);                   // release old memory allocations
+         releaseValue(&o->value);         // by default, kind is empty and releaseValue() does nothing
+         o->name = strcpy(malloc(namlen+1), name);
+         if (value)
+            o->value = *value;
+         return 0;
       }
 
+      else if (ord < 0)
+         change = -addTreeNode(key, name, namlen, value, &o->L, passed);
+
+      else // (ord > 0)
+         change = +addTreeNode(key, name, namlen, value, &o->R, passed);
+
+      if (change)
+         if (abs(o->B += change) > 1)
+            return 1 - balanceNode(node);
+         else
+            return o->B != 0;
       else
+         return 0;
+   }
+}
+
+int removeTreeNode(ulong key, const char *name, Node **node)
+{
+   Node *o = *node;
+
+   if (o == NULL)
+      return 0;                              // not found -> recursively do nothing
+
+   else
+   {
+      int change;
+      int ord = (key) ? (int)(key - o->key) : strcmp(name, o->name);
+
+      if (ord == 0)
       {
-         if (b == -1)
+         int    b = o->B;
+         Node  *p = o->L;
+         Node  *q = o->R;
+
+         if (!p || !q)
          {
-            if (!p->R)
-            {
-               change = +1;
-               o      =  p;
-               o->R   =  q;
-            }
-            else
-            {
-               change = +pickPrevNode(&p, &o);
-               o->L   =  p;
-               o->R   =  q;
-            }
+            free((*node)->name);
+            releaseValue(&(*node)->value);
+            free(*node);
+            *node = (p > q) ? p : q;
+            return 1;                        // remove the weight of 1 leaf from the balance
          }
 
          else
          {
-            if (!q->L)
+            if (b == -1)
             {
-               change = -1;
-               o      =  q;
-               o->L   =  p;
+               if (!p->R)
+               {
+                  change = +1;
+                  o      =  p;
+                  o->R   =  q;
+               }
+               else
+               {
+                  change = +pickPrevNode(&p, &o);
+                  o->L   =  p;
+                  o->R   =  q;
+               }
             }
+
             else
             {
-               change = -pickNextNode(&q, &o);
-               o->L   =  p;
-               o->R   =  q;
+               if (!q->L)
+               {
+                  change = -1;
+                  o      =  q;
+                  o->L   =  p;
+               }
+               else
+               {
+                  change = -pickNextNode(&q, &o);
+                  o->L   =  p;
+                  o->R   =  q;
+               }
             }
+
+            o->B = b;
+            free((*node)->name);
+            releaseValue(&(*node)->value);
+            free(*node);
+            *node = o;
          }
-
-         o->B = b;
-         free((*node)->name);
-         free(*node);
-         *node = o;
       }
-   }
 
-   else if (ord < 0)
-      change = +removeTreeNode(key, &o->L);
+      else if (ord < 0)
+         change = +removeTreeNode(key, name, &o->L);
 
-   else // (ord > 0)
-      change = -removeTreeNode(key, &o->R);
+      else // (ord > 0)
+         change = -removeTreeNode(key, name, &o->R);
 
-   if (change)
-      if (abs(o->B += change) > 1)
-         return balanceNode(node);
+      if (change)
+         if (abs(o->B += change) > 1)
+            return balanceNode(node);
+         else
+            return o->B == 0;
       else
-         return o->B == 0;
-   else
-      return 0;
+         return 0;
+   }
 }
 
-
-void freeTree(Node *node)
+void releaseTree(Node *node)
 {
    if (node)
    {
       if (node->L)
-         freeTree(node->L);
+         releaseTree(node->L);
       if (node->R)
-         freeTree(node->R);
+         releaseTree(node->R);
 
       free(node->name);
+      releaseValue(&node->value);
       free(node);
    }
 }
@@ -576,17 +614,59 @@ void freeTree(Node *node)
 
 #pragma mark ••• Hash Table •••
 
-// Note: This implementation uses the inodes of the files/links
-// as the keys. The inodes are sufficiently random for direct
-// use, without passing through a hash function, i.e:
+// Essence of MurmurHash3_x86_32()
 //
-//    table[key%n + 1]
+//  Original at: http://code.google.com/p/smhasher/source/browse/trunk/MurmurHash3.cpp
 //
-// instead of:
+//  Quote from the Source:
+//  "MurmurHash3 was written by Austin Appleby, and is placed in the public
+//   domain. The author hereby disclaims copyright to this source code."
 //
-//    table[hash(key)%n + 1]
+// Many thanks to Austin!
+
+static inline uint mmh3(const char *name, size_t namlen)
+{
+   size_t n = namlen/4;
+   uint   k1, h1 = (uint)namlen;    // quite tiny (0.2 %) better distribution by seeding the name length
+   uint  *quads = (uint *)(name + n*4);
+   uchar *tail = (uchar *)quads;
+
+   for (int i = -(int)n; i; i++)
+   {
+      k1  = quads[i];
+      k1 *= 0xCC9E2D51;
+      k1  = (k1<<15)|(k1>>17);
+      k1 *= 0x1B873593;
+
+      h1 ^= k1;
+      h1  = (h1<<13)|(h1>>19);
+      h1  = h1*5 + 0xE6546B64;
+   }
+
+   k1 = 0;
+   switch (namlen & 3)
+   {
+      case 3: k1 ^= (uint)(tail[2] << 16);
+      case 2: k1 ^= (uint)(tail[1] << 8);
+      case 1: k1 ^= (uint)(tail[0]);
+              k1 *= 0xCC9E2D51;
+              k1  = (k1<<15)|(k1>>17);
+              k1 *= 0x1B873593;
+              h1 ^= k1;
+   };
+
+   h1 ^= namlen;
+   h1 ^= h1 >> 16;
+   h1 *= 0x85EBCA6B;
+   h1 ^= h1 >> 13;
+   h1 *= 0xC2B2AE35;
+   h1 ^= h1 >> 16;
+
+   return h1;
+}
 
 
+// Table creation and release
 Node **createTable(uint n)
 {
    Node **table = calloc(n + 1, sizeof(Node *));
@@ -594,33 +674,80 @@ Node **createTable(uint n)
    return table;
 }
 
-Node *findTableEntry(Node *table[], ulong key)
-{
-   uint n = *(uint *)table;
-   return findTreeNode(key, table[key%n + 1]);
-}
-
-Node *addTableEntry(Node *table[], ulong key, const char *name, int dev)
-{
-   uint n = *(uint *)table;
-   Node *passed;
-   addTreeNode(key, name, dev, &table[key%n + 1], &passed);
-   return passed;
-}
-
-void removeTableEntry(Node *table[], ulong key)
-{
-   uint n = *(uint *)table;
-   removeTreeNode(key, &table[key%n + 1]);
-}
-
-void freeTable(Node *table[])
+void releaseTable(Node *table[])
 {
    if (table)
    {
       uint i, n = *(uint *)table;
       for (i = 1; i <= n; i++)
-         freeTree(table[i]);
+         releaseTree(table[i]);
       free(table);
    }
+}
+
+
+// The key/name store serves for two purposes.
+//
+//   1. quickly store/find inodes (unsigned long values)
+//      and the respective source file/link name
+//
+//   2. store and retrieve file system names that
+//      exsit in the destination hierarchy.
+//
+// Inodes of the files/links are sufficiently random for direct
+// use, without passing them through a hash function, e.g.:
+//
+//    table[key%n + 1]
+//
+// File system names must be hashed before:
+//
+//    table[mmh3(fsname)%n + 1]
+//
+// For the sake of efficiency and clarity of usage here come
+// two sets of find...(), store...(), and remove...() functions.
+
+
+// Storing/Retrieving file system names by inode
+Node *findINode(Node *table[], ulong inode)
+{
+   uint n = *(uint *)table;
+   return findTreeNode(inode, NULL, table[inode%n + 1]);
+}
+
+Node *storeINode(Node *table[], ulong inode, const char *fsname, size_t namlen, long dev)
+{
+   uint  n = *(uint *)table;
+   Value value; value.kind = Simple, value.i = dev;
+   Node *passed;
+   addTreeNode(inode, fsname, namlen, &value, &table[inode%n + 1], &passed);
+   return passed;
+}
+
+void removeINode(Node *table[], ulong inode)
+{
+   uint n = *(uint *)table;
+   removeTreeNode(inode, NULL, &table[inode%n + 1]);
+}
+
+
+// Storing retrieving file system names
+Node *findFSName(Node *table[], const char *fsname, size_t namlen)
+{
+   uint n = *(uint *)table;
+   return findTreeNode(0, fsname, table[mmh3(fsname, namlen)%n + 1]);
+}
+
+Node *storeFSName(Node *table[], const char *fsname, size_t namlen, long dev)
+{
+   uint n = *(uint *)table;
+   Value value; value.kind = Simple, value.i = dev;
+   Node *passed;
+   addTreeNode(0, fsname, namlen, &value, &table[mmh3(fsname, namlen)%n + 1], &passed);
+   return passed;
+}
+
+void removeFSName(Node *table[], const char *fsname, size_t namlen)
+{
+   uint n = *(uint *)table;
+   removeTreeNode(0, fsname, &table[mmh3(fsname, namlen)%n + 1]);
 }
