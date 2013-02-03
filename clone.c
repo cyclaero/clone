@@ -46,17 +46,27 @@
 
 static const char *svnrev = "(r"STRINGIFY(SVNREV)")";
 
-bool   gRunning    = true;
-bool   gQItemWait  = false;
-bool   gChunkWait  = false;
-bool   gReaderWait = false;
-bool   gWriterWait = false;
-bool   gLevelWait  = false;
-
 dev_t  gSourceDev;
-llong  gWriterLast = 0;
-double gTotalSize  = 0.0;
-Node **gLinkINodes = NULL;
+
+// Mode Flags
+bool   gReadNoCache  = false;
+bool   gWriteNoCache = false;
+bool   gIncremental  = false;
+bool   gSynchronize  = false;
+
+llong  gWriterLast   = 0;
+double gTotalSize    = 0.0;
+
+Node **gLinkINodes   = NULL;
+Node **gExcludeList  = NULL;
+
+// Thread synchronization
+bool   gRunning      = true;
+bool   gQItemWait    = false;
+bool   gChunkWait    = false;
+bool   gReaderWait   = false;
+bool   gWriterWait   = false;
+bool   gLevelWait    = false;
 
 pthread_t       reader_thread;
 pthread_t       writer_thread;
@@ -305,7 +315,7 @@ void *reader(void *threadArg)
       int in = open(qitem->src, O_RDONLY);
       if (in != -1)
       {
-         // fnocache(in);
+         if (gReadNoCache) fnocache(in);
 
          size_t filesize = qitem->st.st_size;
          size_t blcksize = chunkBlckSize;
@@ -425,7 +435,7 @@ void *writer(void *threadArg)
       int out = open(qitem.dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, qitem.st.st_mode & ALLPERMS);
       if (out != -1)
       {
-         // fnocache(out);
+         if (gWriteNoCache) fnocache(out);
 
          int state, rc = NO_ERROR;
 
@@ -551,8 +561,8 @@ int atomCopy(char *src, char *dst, struct stat *st)
    if ((in = open(src, O_RDONLY)) != -1)
       if ((out = open(dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, st->st_mode & ALLPERMS)) != -1)
       {
-         // fnocache(in);
-         // fnocache(out);
+         if (gReadNoCache)  fnocache(in);
+         if (gWriteNoCache) fnocache(out);
 
          if (filesize)
          {
@@ -715,17 +725,26 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
       int   rc;
       llong lastID = 0;
       llong fCount = 0;
+      const char *ftype;
 
       while (readdir_r(sdp, &bep, &ep) == NO_ERROR && ep)
       {
-         // next source and destination paths
-         size_t  nsl = sl + ep->d_namlen;  // next source length
-         size_t  ndl = dl + ep->d_namlen;  // next destination length
+         if (gExcludeList && findFSName(gExcludeList, ep->d_name, ep->d_namlen))
+            continue;
 
-         char *nsrc = strcpy(malloc(nsl+2), src); strcpy(nsrc+sl, ep->d_name);
-         char *ndst = strcpy(malloc(ndl+2), dst); strcpy(ndst+dl, ep->d_name);
+         // next source path
+         size_t nsl  = sl + ep->d_namlen;  // next source length
+         char  *nsrc = strcpy(malloc(nsl+2), src); strcpy(nsrc+sl, ep->d_name);
 
-         const char *ftype;
+         if (gExcludeList && findFSName(gExcludeList, nsrc, nsl))
+         {
+            free(nsrc);
+            continue;
+         }
+
+         // next destination path
+         size_t ndl  = dl + ep->d_namlen;  // next destination length
+         char  *ndst = strcpy(malloc(ndl+2), dst); strcpy(ndst+dl, ep->d_name);
 
          switch(ep->d_type)
          {
@@ -786,8 +805,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                break;
 
             case DT_REG:      //  8 - A regular file.
-               if (stat(nsrc, &st) == NO_ERROR &&
-                   strcmp(ep->d_name, ".sujournal") != 0)
+               if (stat(nsrc, &st) == NO_ERROR)
                   if (st.st_nlink == 1)
                   {
                      if (st.st_size > 0)
@@ -802,7 +820,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                         if (rc != NO_ERROR)
                         {
                            strerror_r(abs(rc), errorString, errStrLen);
-                           printf("\nCreating file %s failed: %s.\n", ndst, errorString);
+                           printf("\nCreating file %s in %s failed: %s.\n", ep->d_name, dst, errorString);
                         }
                      }
                   }
@@ -852,116 +870,252 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
 }
 
 
-int main(int argc, const char *argv[])
+void usage(const char *executable)
 {
-   if (argc != 3)
-      printf("File tree cloning by Dr. Rolf Jansen\nCyclaero Ltda. (c) 2013 - %s\nUsage:  clone source destination\n\n", svnrev);
+   const char *r = executable + strlen(executable);
+   while (r-- >= executable && *r != '/'); r++;
+   printf("File tree cloning by Dr. Rolf Jansen, Cyclaero Ltda. (c) 2013 - %s\n\n", svnrev);
+   printf("\
+Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-x exclude-list] [-X excl-list-file] [-h|-?|?] source/ destination/\n\n\
+       -c roff|woff|rwoff  selectively turn off the file system cache for reading or writing\n\
+                           or for reading and writing -- the caches are on by default.\n\n\
+"/*
+       The options -d, -i, -s are mutually exclusive:\n\
+       -d                  erase the contents of the destination before cloning, but do not\n\
+                           remove the destination directory or mount point itself. Stop on error.\n\n\
+       -i                  incrementally add new content to or change content in the destination,\n\
+                           but do not touch content in destination that does not exist in source.\n\n\
+       -s                  completely synchronize source and destination.\n\n\
+*/"\
+       -x exclude-list     colon separated list of entity names or full path names to be\n\
+                           excluded from cloning. Use full path names to single out exactly\n\
+                           one item. Use entity names, if all existing entities having that name\n\
+                           should be excluded.\n\
+                           for example:  -x \".snap:/.sujournal:.DS_Store:/fullpath/to a/volatile cache\"\n\n\
+       -X excl-list-file   file containig a list of entity names or full path names to be excluded, one item per line.\n\n\
+       -h|-?|?             shows these usage instructions.\n\n\
+       source/             path to the source directory or moint point. The '/' can be omitted.\n\
+       destination/        path to the destination directory or moint point. The '/' can be omitted.\n\n", r);
+}
+
+
+int main(int argc, char *const argv[])
+{
+   int    optchr;
+   char   ch, *o, *p, *q;
+   bool   d_flag = false, i_flag = false, s_flag = false;
+   FILE  *exclf;
+   struct stat exclst;
+
+   while ((optchr = getopt(argc, argv, "c:disx:X:h?")) != -1)
+      switch (optchr)
+      {
+         case 'c':   // selectively turn off the file system cache for reading or writing or for reading and writing
+            if (strcmp(optarg, "roff") == 0)
+               gReadNoCache = true;
+            else if (strcmp(optarg, "woff") == 0)
+               gWriteNoCache = true;
+            else if (strcmp(optarg, "rwoff") == 0)
+               gReadNoCache = gWriteNoCache = true;
+            else
+               goto arg_err;
+            break;
+
+         case 'd':   // delete the contents of the destination before cloning
+            if (i_flag || s_flag)
+               goto arg_err;
+            else
+               d_flag = true;
+            break;
+
+         case 'i':   // incrementally add new content to or change content in the destination
+            if (d_flag || s_flag)
+               goto arg_err;
+            else
+               i_flag = gIncremental = true;
+            break;
+
+         case 's':   // completely synchronize source and destination
+            if (d_flag || i_flag)
+               goto arg_err;
+            else
+               s_flag = gSynchronize = true;
+            break;
+
+         case 'x':   // colon separated list of entity names or full path names to be excluded from cloning
+            if (!gExcludeList)
+               gExcludeList = createTable(256);
+            q = p = optarg;
+            do
+            {
+               while ((ch = *q) && ch != ':')
+                  q++;
+               *q++ = '\0';
+               if (*p)
+                  storeFSName(gExcludeList, p, strlen(p), 0);
+               p = q;
+            } while (ch);
+            break;
+
+         case 'X':
+            if (stat(optarg, &exclst) == NO_ERROR &&
+                (exclf = fopen(optarg, "r")))
+            {
+               if (exclst.st_size)
+               {
+                  if (!gExcludeList)
+                     gExcludeList = createTable(256);
+
+                  o = p = malloc(exclst.st_size + 1);
+                  if (fread(p, exclst.st_size, 1, exclf) == 1)
+                  {
+                     for (q = p + exclst.st_size - 1; q > p && (*q == '\n' || *q == '\r'); q--);   // strip trailing line breaks
+                     if (q > p)
+                     {
+                        *(q+1) = '\0';
+                        q = p;
+                        do
+                        {
+                           while ((ch = *q) && ch != '\n' && ch != '\r')
+                              q++;
+                           *q++ = '\0';
+                           if (*p)
+                              storeFSName(gExcludeList, p, strlen(p), 0);
+                           p = q;
+                        } while (ch);
+                     }
+                  }
+
+                  free(o);
+               }
+
+               fclose(exclf);
+            }
+
+            else
+               goto arg_err;
+            break;
+
+         case 'h':
+         case '?':
+         default:
+         arg_err:
+            usage(argv[0]);
+            return 1;
+      }
+
+   argc -= optind;
+   argv += optind;
+
+   if (argc && argv[0][0] == '?' && argv[0][1] == '\0' || argc < 2)
+   {
+      usage(argv[0]);
+      return 1;
+   }
+
+   // 1. check whether to deal with paths in the home directory
+   size_t homelen = 0;
+   char  *usrhome;
+   bool   stilde = *(short *)argv[0] == *(short *)"~/";
+   bool   dtilde = *(short *)argv[1] == *(short *)"~/";
+   if (stilde || dtilde)
+   {
+      usrhome = getpwuid(getuid())->pw_dir;
+      homelen = strlen(usrhome);
+   }
+
+   size_t as = strlen(argv[0]), sl = (stilde) ? homelen + as - 1 : as;
+   size_t ad = strlen(argv[1]), dl = (dtilde) ? homelen + ad - 1 : ad;
+   char   src[sl+2];
+   char   dst[dl+2];
+   if (stilde)
+   {
+      strcpy(src, usrhome);
+      strcpy(src+homelen, argv[0]+1);
+   }
+   else
+      strcpy(src, argv[0]);
+
+   if (dtilde)
+   {
+      strcpy(dst, usrhome);
+      strcpy(dst+homelen, argv[1]+1);
+   }
+   else
+      strcpy(dst, argv[1]);
+
+   // 2. check whether the paths do exist and lead to directories
+   struct stat sstat, dstat;
+   if (stat(src, &sstat) != NO_ERROR)
+      printf("The source directory %s does not exist.\n", argv[0]);
+
+   else if ((sstat.st_mode & S_IFMT) != S_IFDIR)
+      printf("Source %s is not a directory.\n", argv[0]);
+
+   else if (stat(dst, &dstat) != NO_ERROR &&
+            (mkdir(dst, sstat.st_mode & ALLPERMS) != NO_ERROR || stat(dst, &dstat) != NO_ERROR))
+      printf("The destination directory %s did not exist and a new one could not be created.\n", argv[1]);
+
+   else if ((dstat.st_mode & S_IFMT) != S_IFDIR)
+      printf("Destination %s is not a directory.\n", argv[1]);
 
    else
    {
-      // 1. check whether to deal with paths in the home directory
-      size_t homelen = 0;
-      char  *usrhome;
-      bool   stilde = *(short *)argv[1] == *(short *)"~/";
-      bool   dtilde = *(short *)argv[2] == *(short *)"~/";
-      if (stilde || dtilde)
+      int    i, rc;
+      struct timeval t0, t1;
+      gettimeofday(&t0, NULL);
+
+      gSourceDev  = sstat.st_dev;
+      gLinkINodes = createTable(8192);
+
+      // Initialze the dispensers
+      for (i = 0; i < maxChunkCount; i++)
+         gChunkDispenser[i].state = empty;
+
+      for (i = 0; i < maxQItemCount; i++)
       {
-         usrhome = getpwuid(getuid())->pw_dir;
-         homelen = strlen(usrhome);
+         gQItemDispenser[i].stage = virgin;
+         gQItemDispenser[i].chunk = NULL;
       }
 
-      size_t as = strlen(argv[1]), sl = (stilde) ? homelen + as - 1 : as;
-      size_t ad = strlen(argv[2]), dl = (dtilde) ? homelen + ad - 1 : ad;
-      char   src[sl+2];
-      char   dst[dl+2];
-      if (stilde)
+      pthread_attr_init(&thread_attrib);
+      pthread_attr_setstacksize(&thread_attrib, 1048576);
+      pthread_attr_setdetachstate(&thread_attrib, PTHREAD_CREATE_DETACHED);
+
+      if (rc = pthread_create(&reader_thread, &thread_attrib, reader, NULL))
       {
-         strcpy(src, usrhome);
-         strcpy(src+homelen, argv[1]+1);
+         printf("Cannot create file reader thread: %d.", rc);
+         return 1;
       }
-      else
-         strcpy(src, argv[1]);
 
-      if (dtilde)
+      if (rc = pthread_create(&writer_thread, &thread_attrib, writer, NULL))
       {
-         strcpy(dst, usrhome);
-         strcpy(dst+homelen, argv[2]+1);
+         printf("Cannot create file writer thread: %d.", rc);
+         return 1;
       }
-      else
-         strcpy(dst, argv[2]);
 
-      // 2. check whether the paths do exist and lead to directories
-      struct stat sstat, dstat;
-      if (stat(src, &sstat) != NO_ERROR)
-         printf("The source directory %s does not exist.\n", argv[1]);
+      if (src[sl-1] != '/')
+         *(short *)&src[sl++] = *(short *)"/";
+      if (dst[dl-1] != '/')
+         *(short *)&dst[dl++] = *(short *)"/";
+      printf("File tree cloning by Dr. Rolf Jansen, Cyclaero Ltda. (c) 2013 - %s\n\nclone %s %s\n", svnrev, src, dst);
 
-      else if ((sstat.st_mode & S_IFMT) != S_IFDIR)
-         printf("Source %s is not a directory.\n", argv[1]);
+      putc('.', stdout); fflush(stdout);
+      clone(src, sl, dst, dl);
+      setAttributes(src, dst, &sstat);
 
-      else if (stat(dst, &dstat) != NO_ERROR &&
-               (mkdir(dst, sstat.st_mode & ALLPERMS) != NO_ERROR || stat(dst, &dstat) != NO_ERROR))
-         printf("The destination directory %s did not exist and a new one could not be created.\n", argv[2]);
+      gRunning = false;
+      pthread_cond_signal(&reader_cond);
+      pthread_cond_signal(&writer_cond);
+      releaseTable(gLinkINodes);
+      releaseTable(gExcludeList);
 
-      else if ((dstat.st_mode & S_IFMT) != S_IFDIR)
-         printf("Destination %s is not a directory.\n", argv[2]);
+      gettimeofday(&t1, NULL);
+      double t = t1.tv_sec - t0.tv_sec + (t1.tv_usec - t0.tv_usec)/1.0e6;
+      gTotalSize /= 1048576.0;
+      printf("\n%.1f MB in %.2f s -- %.1f MB/s\n\n", gTotalSize, t, gTotalSize/t);
 
-      else
-      {
-         int    i, rc;
-         struct timeval t0, t1;
-         gettimeofday(&t0, NULL);
-
-         gSourceDev  = sstat.st_dev;
-         gLinkINodes = createTable(8192);
-
-         // Initialze the dispensers
-         for (i = 0; i < maxChunkCount; i++)
-            gChunkDispenser[i].state = empty;
-
-         for (i = 0; i < maxQItemCount; i++)
-         {
-            gQItemDispenser[i].stage = virgin;
-            gQItemDispenser[i].chunk = NULL;
-         }
-
-         pthread_attr_init(&thread_attrib);
-         pthread_attr_setstacksize(&thread_attrib, 1048576);
-         pthread_attr_setdetachstate(&thread_attrib, PTHREAD_CREATE_DETACHED);
-
-         if (rc = pthread_create(&reader_thread, &thread_attrib, reader, NULL))
-         {
-            printf("Cannot create file reader thread: %d.", rc);
-            return 1;
-         }
-
-         if (rc = pthread_create(&writer_thread, &thread_attrib, writer, NULL))
-         {
-            printf("Cannot create file writer thread: %d.", rc);
-            return 1;
-         }
-
-         if (src[sl-1] != '/')
-            *(short *)&src[sl++] = *(short *)"/";
-         if (dst[dl-1] != '/')
-            *(short *)&dst[dl++] = *(short *)"/";
-         printf("File tree cloning by Dr. Rolf Jansen\nCyclaero Ltda. (c) 2013 - %s\n\nclone %s %s\n", svnrev, src, dst);
-
-         putc('.', stdout); fflush(stdout);
-         clone(src, sl, dst, dl);
-         setAttributes(src, dst, &sstat);
-
-         gRunning = false;
-         pthread_cond_signal(&reader_cond);
-         pthread_cond_signal(&writer_cond);
-         releaseTable(gLinkINodes);
-
-         gettimeofday(&t1, NULL);
-         double t = t1.tv_sec - t0.tv_sec + (t1.tv_usec - t0.tv_usec)/1.0e6;
-         gTotalSize /= 1048576.0;
-         printf("\n%.1f MB in %.2f s -- %.1f MB/s\n\n", gTotalSize, t, gTotalSize/t);
-
-         return 0;
-      }
+      return 0;
    }
 
    return 1;
