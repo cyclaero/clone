@@ -953,7 +953,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
 void usage(const char *executable)
 {
    const char *r = executable + strlen(executable);
-   while (r-- >= executable && *r != '/'); r++;
+   while (--r >= executable && *r != '/'); r++;
    printf("File tree cloning by Dr. Rolf Jansen, Cyclaero Ltda. (c) 2013 - %s\n\n", svnrev);
    printf("\
 Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-x exclude-list] [-X excl-list-file] [-h|-?|?] source/ destination/\n\n\
@@ -965,7 +965,7 @@ Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-x exclude-list] [-X excl-list-file] 
        The options -d, -i, -s are mutually exclusive:\n\
        -i                  Incrementally add new content to or change content in the destination,\n\
                            but do not touch content in destination that does not exist in source.\n\n\
-       -s                  Completely synchronize source and destination.\n\n\
+       -s                  Completely synchronize destination with source.\n\n\
 */"\
        -x exclude-list     Colon separated list of entity names or full path names to be\n\
                            excluded from cloning. Use full path names to single out exactly\n\
@@ -984,7 +984,7 @@ int main(int argc, char *const argv[])
 {
    int    optchr;
    size_t homelen = 0;
-   char   ch, *o, *p, *q, *usrhome;
+   char   ch, *o, *p, *q, *usrhome, *cmd = argv[0];
    bool   d_flag = false, i_flag = false, s_flag = false;
    FILE  *exclf;
    struct stat exclst;
@@ -1090,16 +1090,16 @@ int main(int argc, char *const argv[])
          case '?':
          default:
          arg_err:
-            usage(argv[0]);
+            usage(cmd);
             return 1;
       }
 
    argc -= optind;
    argv += optind;
 
-   if (argc && argv[0][0] == '?' && argv[0][1] == '\0' || argc < 2)
+   if (argc < 2 || argc && argv[0][0] == '?' && argv[0][1] == '\0')
    {
-      usage(argv[0]);
+      usage(cmd);
       return 1;
    }
 
