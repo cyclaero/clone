@@ -957,25 +957,26 @@ void usage(const char *executable)
    printf("File tree cloning by Dr. Rolf Jansen, Cyclaero Ltda. (c) 2013 - %s\n\n", svnrev);
    printf("\
 Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-x exclude-list] [-X excl-list-file] [-h|-?|?] source/ destination/\n\n\
-       -c roff|woff|rwoff  selectively turn off the file system cache for reading or writing\n\
+       -c roff|woff|rwoff  Selectively turn off the file system cache for reading or writing\n\
                            or for reading and writing -- the caches are on by default.\n\n\
-       -d                  delete the contents of the destination before cloning, but do not\n\
+       -d                  Delete the contents of the destination before cloning, but do not\n\
                            remove the destination directory or mount point itself. Stop on error.\n\n\
 "/*
        The options -d, -i, -s are mutually exclusive:\n\
-       -i                  incrementally add new content to or change content in the destination,\n\
+       -i                  Incrementally add new content to or change content in the destination,\n\
                            but do not touch content in destination that does not exist in source.\n\n\
-       -s                  completely synchronize source and destination.\n\n\
+       -s                  Completely synchronize source and destination.\n\n\
 */"\
-       -x exclude-list     colon separated list of entity names or full path names to be\n\
+       -x exclude-list     Colon separated list of entity names or full path names to be\n\
                            excluded from cloning. Use full path names to single out exactly\n\
                            one item. Use entity names, if all existing entities having that name\n\
                            should be excluded.\n\
-                           for example:  -x \".snap:/.sujournal:.DS_Store:/fullpath/to a/volatile cache\"\n\n\
-       -X excl-list-file   file containig a list of entity names or full path names to be excluded, one item per line.\n\n\
-       -h|-?|?             shows these usage instructions.\n\n\
-       source/             path to the source directory or moint point. The '/' can be omitted.\n\
-       destination/        path to the destination directory or moint point. The '/' can be omitted.\n\n", r);
+                           For example:  -x \".snap:/.sujournal:.DS_Store:/fullpath/to a/volatile cache\"\n\n\
+       -X excl-list-file   File containig a list of entity names or full path names to be excluded -- one item per line.\n\n\
+       -h|-?|?             Show these usage instructions.\n\n\
+       source/             Path to the source directory or moint point. The final '/' may be omitted.\n\n\
+       destination/        Path to the destination directory or moint point. If the destination\n\
+                           does not exist, then it will be created. The final '/' may be omitted.\n\n", r);
 }
 
 

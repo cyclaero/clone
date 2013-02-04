@@ -56,34 +56,31 @@ is also very well suited for cloning a file tree to any place on the same disk. 
 whole directory hierarchy, i.e. sub-directories, files, hard links, symbolic links, attributes (modes,
 flags, times), extended attributes and access control lists.
 .Pp
-.Ar source/
-designates the path to the root node of file tree to be cloned.
-.Pp
-.Ar destination/
-designates the path to the cloned file tree. If the destination directory
-does not exist, then it will be created.
-.Pp
 For example, cloning a whole file hierarchy of in total 2.3 TBytes of data from one hard disk to another took on a given setup 7.5 h, so the
 average transfer rate for all kind of files (very small up to very big ones) was about 89 MByte/s.
 .Pp
 .Nm
 is useful for cloning (thus backing-up) live file systems. Works on FreeBSD and Darwin (Mac OS X).
 .Pp                           \" Inserts a space
-.\" A list of items with descriptions:
-.\" .Bl -tag -width -indent   \" Begins a tagged list 
-.\" .It item a                \" Each item preceded by .It macro
-.\" Description of item a
-.\" .It item b
-.\" Description of item b
-.\" .El                       \" Ends the list
-.\" .Pp
-.\" A list of flags and their descriptions:
-.\" .Bl -tag -width -indent   \" Differs from above in tag removed 
-.\" .It Fl a                  \"-a flag as a list item
-.\" Description of -a flag
-.\" .It Fl b
-.\" Description of -b flag
-.\" .El                       \" Ends the list
+The following options are available:
+.Bl -tag -width -indent       \" Begins a tagged list, each item preceded by .It macro
+.It Fl c Ar roff|woff|rwoff
+Selectively turn off the file system cache for reading or writing or for reading and writing -- the caches are on by default.
+.It Fl d
+Delete the contents of the destination before cloning, but do not remove the destination directory or mount point itself. Stop on error.
+.It Fl x Ar exclude-list
+Colon separated list of entity names or full path names to be excluded from cloning. Use full path names to single out exactly one item. Use entity names, if all existing entities having that name should be excluded.
+.It For example:
+-x ".snap:/.sujournal:.DS_Store:/fullpath/to a/volatile cache"
+.It Fl X Ar excl-list-file
+File containig a list of entity names or full path names to be excluded -- one item per line.
+.It Fl h Ns | Ns Fl \&? Ns | Ns Sy \&?
+Show the usage instructions.
+.It Ar source/
+Path to the source directory or moint point to be cloned. The final '/' may be omitted.
+.It Ar destination/
+Path to the destination directory or moint point. If the destination does not exist, then it will be created. The final '/' may be omitted. 
+.El                           \" Ends the list
 .\" .Pp
 .\" .Sh ENVIRONMENT           \" May not be needed
 .\" .Bl -tag -width "ENV_VAR_1" -indent \" ENV_VAR_1 is width of the string ENV_VAR_1
