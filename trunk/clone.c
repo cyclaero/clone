@@ -902,7 +902,8 @@ Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-x exclude-list] [-X excl-list-file] 
 int main(int argc, char *const argv[])
 {
    int    optchr;
-   char   ch, *o, *p, *q;
+   size_t homelen = 0;
+   char   ch, *o, *p, *q, *usrhome;
    bool   d_flag = false, i_flag = false, s_flag = false;
    FILE  *exclf;
    struct stat exclst;
@@ -958,15 +959,25 @@ int main(int argc, char *const argv[])
             break;
 
          case 'X':
-            if (stat(optarg, &exclst) == NO_ERROR &&
-                (exclf = fopen(optarg, "r")))
+            if (*(short *)optarg == *(short *)"~/")
+            {
+               usrhome = getpwuid(getuid())->pw_dir;
+               homelen = strlen(usrhome);
+               strcpy(o = alloca(homelen+strlen(optarg)+1), usrhome);
+               strcpy(o+homelen, optarg+1);
+            }
+            else
+               o = optarg;
+
+            if (stat(o, &exclst) == NO_ERROR &&
+                (exclf = fopen(o, "r")))
             {
                if (exclst.st_size)
                {
                   if (!gExcludeList)
                      gExcludeList = createTable(256);
 
-                  o = p = malloc(exclst.st_size + 1);
+                  o = p = alloca(exclst.st_size + 1);
                   if (fread(p, exclst.st_size, 1, exclf) == 1)
                   {
                      for (q = p + exclst.st_size - 1; q > p && (*q == '\n' || *q == '\r'); q--);   // strip trailing line breaks
@@ -985,8 +996,6 @@ int main(int argc, char *const argv[])
                         } while (ch);
                      }
                   }
-
-                  free(o);
                }
 
                fclose(exclf);
@@ -1014,11 +1023,9 @@ int main(int argc, char *const argv[])
    }
 
    // 1. check whether to deal with paths in the home directory
-   size_t homelen = 0;
-   char  *usrhome;
-   bool   stilde = *(short *)argv[0] == *(short *)"~/";
-   bool   dtilde = *(short *)argv[1] == *(short *)"~/";
-   if (stilde || dtilde)
+   bool stilde = *(short *)argv[0] == *(short *)"~/";
+   bool dtilde = *(short *)argv[1] == *(short *)"~/";
+   if (!homelen && (stilde || dtilde))
    {
       usrhome = getpwuid(getuid())->pw_dir;
       homelen = strlen(usrhome);
@@ -1084,13 +1091,13 @@ int main(int argc, char *const argv[])
 
       if (rc = pthread_create(&reader_thread, &thread_attrib, reader, NULL))
       {
-         printf("Cannot create file reader thread: %d.", rc);
+         printf("Cannot create file reader thread: %s.", strerror(rc));
          return 1;
       }
 
       if (rc = pthread_create(&writer_thread, &thread_attrib, writer, NULL))
       {
-         printf("Cannot create file writer thread: %d.", rc);
+         printf("Cannot create file writer thread: %s.",  strerror(rc));
          return 1;
       }
 
@@ -1098,7 +1105,7 @@ int main(int argc, char *const argv[])
          *(short *)&src[sl++] = *(short *)"/";
       if (dst[dl-1] != '/')
          *(short *)&dst[dl++] = *(short *)"/";
-      printf("File tree cloning by Dr. Rolf Jansen, Cyclaero Ltda. (c) 2013 - %s\n\nclone %s %s\n", svnrev, src, dst);
+      printf("File tree cloning by Dr. Rolf Jansen, Cyclaero Ltda. (c) 2013 - %s\nclone %s %s\n", svnrev, src, dst);
 
       putc('.', stdout); fflush(stdout);
       clone(src, sl, dst, dl);
