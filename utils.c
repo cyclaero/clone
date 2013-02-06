@@ -42,18 +42,41 @@
 
 #pragma mark ••• Passing all Attribute •••
 
+void setTimes(const char *dst, struct stat *st)
+{
+// from man 2 utimes (FreeBSD 9.1)
+/*
+     If times is non-NULL, it is assumed to point to an array of two timeval
+     structures.  The access time is set to the value of the first element,
+     and the modification time is set to the value of the second element.  For
+     file systems that support file birth (creation) times (such as UFS2), the
+     birth time will be set to the value of the second element if the second
+     element is older than the currently set birth time.  To set both a birth
+     time and a modification time, two calls are required; the first to set
+     the birth time and the second to set the (presumably newer) modification
+     time.  Ideally a new system call will be added that allows the setting of
+     all three times at once.  The caller must be the owner of the file or be
+     the super-user.
+*/
+   struct timeval tv[2];
+   tv[0].tv_sec = st->st_atimespec.tv_sec, tv[0].tv_usec = (int)(st->st_atimespec.tv_nsec/1000);
+   tv[1].tv_sec = st->st_birthtimespec.tv_sec, tv[1].tv_usec = (int)(st->st_birthtimespec.tv_nsec/1000);
+   lutimes(dst, tv);
+   tv[1].tv_sec = st->st_mtimespec.tv_sec, tv[1].tv_usec = (int)(st->st_mtimespec.tv_nsec/1000);
+   lutimes(dst, tv);
+}
+
 void setAttributes(const char *src, const char *dst, struct stat *st)
 {
-   struct timeval tv[2];
-   ExtMetaData    xmd;
+   ExtMetaData xmd;
 
    lchown(dst, st->st_uid, st->st_gid);
    lchmod(dst, st->st_mode & ALLPERMS);
 
    getMetaData(src, &xmd);
    setMetaData(dst, &xmd);
+   setTimes(dst, st);
 
-   lutimes(dst, utimeset(st, tv));
    lchflags(dst, st->st_flags);
 }
 
@@ -445,11 +468,22 @@ static int pickNextNode(Node **node, Node **exch)
 // CAUTION: It is an error to call these functions with key being 0 AND name being NULL.
 //          Either of both must be non-zero. No error cheking is done within these recursive functions.
 
+static inline long order(ulong key, const char *name, Node *node)
+{
+   long result;
+
+   if (key)
+      if ((result = key - node->key) || !name)
+         return result;
+
+   return strcmp(name, node->name);
+}
+
 Node *findTreeNode(ulong key, const char *name, Node *node)
 {
    if (node)
    {
-      int ord = (key) ? (int)(key - node->key) : strcmp(name, node->name);
+      long ord = order(key, name, node);
 
       if (ord == 0)
          return node;
@@ -481,8 +515,8 @@ int addTreeNode(ulong key, const char *name, size_t namlen, Value *value, Node *
 
    else
    {
-      int change;
-      int ord = (key) ? (int)(key - o->key) : strcmp(name, o->name);
+      int  change;
+      long ord = order(key, name, o);
 
       if (ord == 0)                       // if the key/name is already in the tree then
       {
@@ -520,8 +554,8 @@ int removeTreeNode(ulong key, const char *name, Node **node)
 
    else
    {
-      int change;
-      int ord = (key) ? (int)(key - o->key) : strcmp(name, o->name);
+      int  change;
+      long ord = order(key, name, o);
 
       if (ord == 0)
       {
@@ -686,7 +720,7 @@ void releaseTable(Node *table[])
 }
 
 
-// The key/name store serves for two purposes.
+// The key-name/value store serves for two purposes.
 //
 //   1. quickly store/find inodes (unsigned long values)
 //      and the respective source file/link name
@@ -725,31 +759,41 @@ Node *storeINode(Node *table[], ulong inode, const char *fsname, size_t namlen, 
 
 void removeINode(Node *table[], ulong inode)
 {
-   uint n = *(uint *)table;
-   removeTreeNode(inode, NULL, &table[inode%n + 1]);
+   uint  tidx = inode % *(uint*)table + 1;
+   Node *node = table[tidx];
+   if (node && !node->L && !node->R)
+   {
+      free(node->name);
+      releaseValue(&node->value);
+      free(node);
+      table[tidx] = NULL;
+   }
+   else
+      removeTreeNode(inode, NULL, &table[tidx]);
 }
 
 
 // Storing retrieving file system names
 Node *findFSName(Node *table[], const char *fsname, size_t namlen)
 {
-   if (fsname)
+   if (fsname && *fsname)
    {
-      uint n = *(uint *)table;
-      return findTreeNode(0, fsname, table[mmh3(fsname, namlen)%n + 1]);
+      uint  n = *(uint *)table;
+      ulong hkey = mmh3(fsname, namlen);
+      return findTreeNode(hkey, fsname, table[hkey%n + 1]);
    }
    else
       return NULL;
 }
 
-Node *storeFSName(Node *table[], const char *fsname, size_t namlen, long dev)
+Node *storeFSName(Node *table[], const char *fsname, size_t namlen, Value *value)
 {
-   if (fsname)
+   if (fsname && *fsname)
    {
-      uint n = *(uint *)table;
-      Value value; value.kind = Simple, value.i = dev;
+      uint  n = *(uint *)table;
+      ulong hkey = mmh3(fsname, namlen);
       Node *passed;
-      addTreeNode(0, fsname, namlen, &value, &table[mmh3(fsname, namlen)%n + 1], &passed);
+      addTreeNode(hkey, fsname, namlen, value, &table[hkey%n + 1], &passed);
       return passed;
    }
    else
@@ -758,9 +802,19 @@ Node *storeFSName(Node *table[], const char *fsname, size_t namlen, long dev)
 
 void removeFSName(Node *table[], const char *fsname, size_t namlen)
 {
-   if (fsname)
+   if (fsname && *fsname)
    {
-      uint n = *(uint *)table;
-      removeTreeNode(0, fsname, &table[mmh3(fsname, namlen)%n + 1]);
+      ulong hkey = mmh3(fsname, namlen);
+      uint  tidx = hkey % *(uint*)table + 1;
+      Node *node = table[tidx];
+      if (node && !node->L && !node->R)
+      {
+         free(node->name);
+         releaseValue(&node->value);
+         free(node);
+         table[tidx] = NULL;
+      }
+      else
+         removeTreeNode(hkey, fsname, &table[tidx]);
    }
 }

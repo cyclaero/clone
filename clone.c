@@ -55,9 +55,10 @@ bool   gIncremental  = false;
 bool   gSynchronize  = false;
 
 llong  gWriterLast   = 0;
+llong  gTotalItems   = 0;
 double gTotalSize    = 0.0;
 
-Node **gLinkINodes   = NULL;
+Node **gHLinkINodes  = NULL;
 Node **gExcludeList  = NULL;
 
 // Thread synchronization
@@ -474,7 +475,10 @@ void *writer(void *threadArg)
          close(out);
 
          if (rc == NO_ERROR)
+         {
+            gTotalItems++;
             gTotalSize += qitem.st.st_size;
+         }
 
          else
          {
@@ -588,6 +592,7 @@ int atomCopy(char *src, char *dst, struct stat *st)
 
          close(out);
          close(in);
+         gTotalItems++;
          gTotalSize += filesize;
          return rc;
       }
@@ -606,17 +611,18 @@ int atomCopy(char *src, char *dst, struct stat *st)
 int hlnkCopy(char *src, char *dst, size_t dl, struct stat *st)
 {
    int    rc;
-   Node  *ino = findINode(gLinkINodes, st->st_ino);
+   Node  *ino = findINode(gHLinkINodes, st->st_ino);
 
    if (ino && ino->value.i == st->st_dev)
    {
       chflags(ino->name, 0);
       rc = (link(ino->name, dst) == NO_ERROR) ? 0 : DST_ERROR;
+      gTotalItems++;
    }
 
    else
    {
-      storeINode(gLinkINodes, st->st_ino, dst, dl, st->st_dev);
+      storeINode(gHLinkINodes, st->st_ino, dst, dl, st->st_dev);
       rc = atomCopy(src, dst, st);
    }
 
@@ -637,6 +643,7 @@ int fileEmpty(char *src, char *dst, struct stat *st)
    if (out != -1)
    {
       close(out);
+      gTotalItems++;
       setAttributes(src, dst, st);
       rc = NO_ERROR;
    }
@@ -663,45 +670,45 @@ void fileCopy(llong fid, char *src, char *dst, struct stat *st)
 }
 
 
-int slnkCopy(char *src, char *dst)
+int slnkCopy(char *src, char *dst, struct stat *st)
 {
    int    rc = NO_ERROR;
    char  *revpath = NULL;
    size_t revlen, maxlen = 1024;
-   struct stat st;
 
-   if (lstat(src, &st) == NO_ERROR)
+   // 1. reveal the path pointed to by the link
+   revpath = malloc(maxlen);
+   while ((revlen = readlink(src, revpath, maxlen)) >= maxlen)
    {
-      // 1. reveal the path pointed to by the link
-      revpath = malloc(maxlen);
-      while ((revlen = readlink(src, revpath, maxlen)) >= maxlen)
+      free(revpath);
+      if ((maxlen += maxlen) <= 1048576)
+         revpath = malloc(maxlen += maxlen);
+      else
       {
-         free(revpath);
-         if ((maxlen += maxlen) <= 1048576)
-            revpath = malloc(maxlen += maxlen);
-         else
-         {
-            revpath = NULL;      // if the length of the path to be revealed does'nt fit yet
-            rc = -1;             // into 1 MB, then there is something screwed in our system
-            goto cleanup;
-         }
-      }
-
-      if (revlen == -1)
-      {
-         rc = SRC_ERROR;
+         revpath = NULL;      // if the length of the path to be revealed does'nt fit yet
+         rc = -1;             // into 1 MB, then there is something screwed in our system
          goto cleanup;
       }
-
-      else
-         revpath[revlen] = '\0';
-
-      // 2. create a new symlink at dst pointing to the revealed path
-      if (symlink(revpath, dst) == NO_ERROR)
-         setAttributes(src, dst, &st);
-      else
-         rc = DST_ERROR;
    }
+
+   if (revlen == -1)
+   {
+      rc = SRC_ERROR;
+      goto cleanup;
+   }
+
+   else
+      revpath[revlen] = '\0';
+
+   // 2. create a new symlink at dst pointing to the revealed path
+   if (symlink(revpath, dst) == NO_ERROR)
+   {
+      setAttributes(src, dst, st);
+      gTotalItems++;
+   }
+
+   else
+      rc = DST_ERROR;
 
 cleanup:
    free(revpath);
@@ -711,18 +718,75 @@ cleanup:
 }
 
 
-int dirDelete(char *path, size_t pl)
+int deleteDirectory(char *path, size_t pl);
+
+int deleteDirEntity(char *path, size_t pl, long d_type)
 {
-   int    err, rc = NO_ERROR;
    static char errorString[errStrLen];
+   const char *ftype;
+   int err, rc = NO_ERROR;
+
+   switch (d_type)
+   {
+      case DT_DIR:      //  4 - A directory.
+         *(short *)&path[pl++] = *(short *)"/";
+         chflags(path, 0);
+         if (err = deleteDirectory(path, pl))
+            rc = err;
+         else if (rmdir(path) != NO_ERROR)
+         {
+            rc = errno;
+            strerror_r(rc, errorString, errStrLen);
+            printf("\nDirectory %s could not be deleted: %s.\n", path, errorString);
+         }
+         break;
+
+      case DT_REG:      //  8 - A regular file.
+      case DT_LNK:      // 10 - A symbolic link.
+         lchflags(path, 0);
+         if (unlink(path) != NO_ERROR)
+         {
+            rc = errno;
+            strerror_r(rc, errorString, errStrLen);
+            printf("\nFile %s could not be deleted: %s.\n", path, errorString);
+         }
+         break;
+
+      default:
+      case DT_UNKNOWN:  //  0 - The type is unknown.
+         ftype = "of unknown type";
+         goto special;
+      case DT_FIFO:     //  1 - A named pipe or FIFO.
+         ftype = "a named pipe or FIFO";
+         goto special;
+      case DT_CHR:      //  2 - A character device.
+         ftype = "a character device";
+         goto special;
+      case DT_BLK:      //  6 - A block device.
+         ftype = "a block device";
+         goto special;
+      case DT_SOCK:     // 12 - A local-domain socket.
+         ftype = "a local-domain socket";
+         goto special;
+      case DT_WHT:      // 14 - A whiteout file. (somehow deleted, but not eventually yet)
+         ftype = "a unsupported whiteout file";
+      special:
+         printf("\n%s is %s, it could not be deleted.\n", path, ftype);
+         break;
+   }
+
+   return rc;
+}
+
+int deleteDirectory(char *path, size_t pl)
+{
+   int rc = NO_ERROR;
 
    DIR   *dp;
    struct dirent bep, *ep;
 
    if (dp = opendir(path))
    {
-      const char *ftype;
-
       while (readdir_r(dp, &bep, &ep) == 0 && ep)
          if (ep->d_name[0] != '.' || (ep->d_name[1] != '\0' &&
             (ep->d_name[1] != '.' ||  ep->d_name[2] != '\0')))
@@ -730,57 +794,7 @@ int dirDelete(char *path, size_t pl)
             // next path
             size_t npl   = pl + ep->d_namlen;
             char  *npath = strcpy(malloc(npl+2), path); strcpy(npath+pl, ep->d_name);
-
-            switch(ep->d_type)
-            {
-               case DT_UNKNOWN:  //  0 - The type is unknown.
-               case DT_WHT:      // 14 - A whiteout file. (somehow deleted, but not eventually yet)
-               default:
-                  printf("\n%s is of unsupported type, and could not be deleted %d.\n", npath, ep->d_type);
-                  break;
-
-               case DT_FIFO:     //  1 - A named pipe or FIFO.
-                  ftype = "named pipe or FIFO";
-                  goto special;
-
-               case DT_CHR:      //  2 - A character device.
-                  ftype = "character device";
-                  goto special;
-
-               case DT_BLK:      //  6 - A block device.
-                  ftype = "block device";
-                  goto special;
-
-               case DT_SOCK:     // 12 - A local-domain socket.
-                  ftype = "local-domain socket";
-
-               special:
-                  printf("\n%s is a %s, and it could not be deleted.\n", npath, ftype);
-                  break;
-
-               case DT_DIR:      //  4 - A directory.
-                  *(short *)&npath[npl++] = *(short *)"/";
-                  if (err = dirDelete(npath, npl))
-                     rc = err;
-                  else if (rmdir(npath) != NO_ERROR)
-                  {
-                     rc = errno;
-                     strerror_r(rc, errorString, errStrLen);
-                     printf("\nDirectory %s could not be deleted: %s.\n", npath, errorString);
-                  }
-                  break;
-
-               case DT_REG:      //  8 - A regular file.
-               case DT_LNK:      // 10 - A symbolic link.
-                  if (unlink(npath) != NO_ERROR)
-                  {
-                     rc = errno;
-                     strerror_r(rc, errorString, errStrLen);
-                     printf("\nFile %s could not be deleted: %s.\n", npath, errorString);
-                  }
-                  break;
-            }
-
+            rc = deleteDirEntity(npath, npl, ep->d_type);
             free(npath);
          }
 
@@ -790,15 +804,70 @@ int dirDelete(char *path, size_t pl)
    return rc;
 }
 
+int deleteEntityTree(Node *syncNode, const char *path, size_t pl)
+{
+   int rcL, rcR, rc = rcL = rcR = NO_ERROR;
+
+   if (syncNode->L)
+      rcL = deleteEntityTree(syncNode->L, path, pl);
+   if (syncNode->R)
+      rcR = deleteEntityTree(syncNode->R, path, pl);
+
+   size_t npl   = pl + strlen(syncNode->name);
+   char  *npath = strcpy(malloc(npl+2), path); strcpy(npath+pl, syncNode->name);
+   rc = deleteDirEntity(npath, npl, syncNode->value.i);
+   free(npath);
+
+   free(syncNode->name);
+   free(syncNode);
+
+   return (rcL != NO_ERROR) ? rcL : (rcR != NO_ERROR) ? rcR : rc;
+}
+
 
 void clone(const char *src, size_t sl, const char *dst, size_t dl)
 {
    static char   errorString[errStrLen];
    static llong  fileID = 0;
 
-   DIR          *sdp;
-   struct dirent bep, *ep;
-   struct stat   st;
+   DIR           *sdp,  *ddp;
+   struct dirent *sep,  *dep, bep;
+
+   // In incremental or sysnchronize mode, store
+   // the inventory of the destination directory
+   // id the key-name/value store.
+   Node *syncNode, **syncEntities = NULL;
+   if ((gIncremental || gSynchronize) &&
+       (ddp = opendir(dst)))
+   {
+      Value  value = {Simple};
+      syncEntities = createTable(1024);
+      while (readdir_r(ddp, &bep, &dep) == NO_ERROR && dep)
+         if ( dep->d_name[0] != '.' || (dep->d_name[1] != '\0' &&
+             (dep->d_name[1] != '.' ||  dep->d_name[2] != '\0')))
+         {
+            switch (value.i = dep->d_type)
+            {
+               case DT_DIR:      //  4 - A directory.
+               case DT_REG:      //  8 - A regular file.
+               case DT_LNK:      // 10 - A symbolic link.
+                  storeFSName(syncEntities, dep->d_name, dep->d_namlen, &value);
+                  break;
+
+               default:
+               case DT_UNKNOWN:  //  0 - The type is unknown.
+               case DT_FIFO:     //  1 - A named pipe or FIFO.
+               case DT_CHR:      //  2 - A character device.
+               case DT_BLK:      //  6 - A block device.
+               case DT_SOCK:     // 12 - A local-domain socket.
+               case DT_WHT:      // 14 - A whiteout file. (somehow deleted, but not eventually yet)
+                  // do nothing
+                  break;
+            }
+         }
+
+      closedir(ddp);
+   }
 
    if (sdp = opendir(src))
    {
@@ -807,77 +876,104 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
       llong fCount = 0;
       const char *ftype;
 
-      while (readdir_r(sdp, &bep, &ep) == NO_ERROR && ep)
-         if (ep->d_name[0] != '.' || (ep->d_name[1] != '\0' &&
-            (ep->d_name[1] != '.' ||  ep->d_name[2] != '\0')))
+      while (readdir_r(sdp, &bep, &sep) == NO_ERROR && sep)
+         if ( sep->d_name[0] != '.' || (sep->d_name[1] != '\0' &&
+             (sep->d_name[1] != '.' ||  sep->d_name[2] != '\0')))
          {
-            if (gExcludeList && findFSName(gExcludeList, ep->d_name, ep->d_namlen))
+            if (gExcludeList && findFSName(gExcludeList, sep->d_name, sep->d_namlen))
                continue;
 
             // next source path
-            size_t nsl  = sl + ep->d_namlen;  // next source length
-            char  *nsrc = strcpy(malloc(nsl+2), src); strcpy(nsrc+sl, ep->d_name);
+            size_t nsl  = sl + sep->d_namlen;  // next source length
+            char  *nsrc = strcpy(malloc(nsl+2), src); strcpy(nsrc+sl, sep->d_name);
+            struct stat sstat;
 
-            if (gExcludeList && findFSName(gExcludeList, nsrc, nsl))
+            if (gExcludeList && findFSName(gExcludeList, nsrc, nsl) ||
+                stat(nsrc, &sstat) != NO_ERROR)
             {
                free(nsrc);
                continue;
             }
 
             // next destination path
-            size_t ndl  = dl + ep->d_namlen;  // next destination length
-            char  *ndst = strcpy(malloc(ndl+2), dst); strcpy(ndst+dl, ep->d_name);
+            size_t ndl  = dl + sep->d_namlen;  // next destination length
+            char  *ndst = strcpy(malloc(ndl+2), dst); strcpy(ndst+dl, sep->d_name);
+            struct stat dstat; dstat.st_ino = 0;
 
-            switch(ep->d_type)
+            if (syncEntities &&    // only non-NULL in incremental or synchronize mode
+                (syncNode = findFSName(syncEntities, sep->d_name, sep->d_namlen)))
             {
-               case DT_UNKNOWN:  //  0 - The type is unknown.
-               case DT_WHT:      // 14 - A whiteout file. (somehow deleted, but not eventually yet)
-               default:
-                  printf("\n%s is of unsupported type %d.\n", nsrc, ep->d_type);
+               long d_type = syncNode->value.i;
+               removeFSName(syncEntities, sep->d_name, sep->d_namlen);
+
+               // This file system name is already present at the destination,
+               // but is it really exactly the same file or entity?
+               if (d_type == sep->d_type &&
+                   stat(ndst, &dstat) == NO_ERROR &&
+                   dstat.st_size                  == sstat.st_size &&
+                   dstat.st_uid                   == sstat.st_uid &&
+                   dstat.st_gid                   == sstat.st_gid &&
+                   dstat.st_mode                  == sstat.st_mode &&
+                   dstat.st_flags                 == sstat.st_flags &&
+                   dstat.st_mtimespec.tv_sec      == sstat.st_mtimespec.tv_sec &&
+                   dstat.st_mtimespec.tv_nsec     == sstat.st_mtimespec.tv_nsec &&
+                   dstat.st_birthtimespec.tv_sec  == sstat.st_birthtimespec.tv_sec &&
+                   dstat.st_birthtimespec.tv_nsec == sstat.st_birthtimespec.tv_nsec)
+               {
+                  if (d_type != DT_DIR)
+                  {
+                     // Yes, it is, so skip it!
+                     free(nsrc);
+                     free(ndst);
+                     continue;
+                  }
+               }
+
+               // No, it has the same name, but it is somehow different.
+               // So, try to delete it from the destination before continuing.
+               else if (deleteDirEntity(ndst, ndl, d_type) != NO_ERROR)
+               {
+                  // If it cannot be deleted, it cannot be overwritten either.
+                  // A message has already been dropped, and there is nothing
+                  // good left to be done here, so skip this one.
                   free(nsrc);
                   free(ndst);
-                  break;
+                  continue;
+               }
+            }
 
-               case DT_FIFO:     //  1 - A named pipe or FIFO.
-                  ftype = "named pipe or FIFO";
-                  goto special;
+            bool dirCreated = false;
 
-               case DT_CHR:      //  2 - A character device.
-                  ftype = "character device";
-                  goto special;
-
-               case DT_BLK:      //  6 - A block device.
-                  ftype = "block device";
-                  goto special;
-
-               case DT_SOCK:     // 12 - A local-domain socket.
-                  ftype = "local-domain socket";
-
-               special:
-                  printf("\n%s is a %s, and it is not copied.\n", nsrc, ftype);
-                  free(nsrc);
-                  free(ndst);
-                  break;
-
+            switch (sep->d_type)
+            {
                case DT_DIR:      //  4 - A directory.
-                  if (stat(nsrc, &st) == NO_ERROR
-                      && mkdir(ndst, st.st_mode & ALLPERMS) == NO_ERROR)
+                  if ((dstat.st_ino != 0      || stat(ndst, &dstat) == NO_ERROR) &&
+                      (S_ISDIR(dstat.st_mode) || (dirCreated = (mkdir(ndst, sstat.st_mode & ALLPERMS) == NO_ERROR))))
                   {
                      putc('.', stdout); fflush(stdout);
                      *(short *)&nsrc[nsl++] = *(short *)&ndst[ndl++] = *(short *)"/";
-                     if (st.st_dev == gSourceDev)
+                     if (sstat.st_dev == gSourceDev)
                      {
                         clone(nsrc, nsl, ndst, ndl);
-                        setAttributes(nsrc, ndst, &st);
+                        setAttributes(nsrc, ndst, &sstat);
                      }
                      else
                      {
-                        struct timeval tv[2];
-                        chown(ndst, st.st_uid, st.st_gid);
-                        chmod(ndst, st.st_mode & ALLPERMS);
-                        utimes(ndst, utimeset(&st, tv));
-                        chflags(ndst, st.st_flags);
+                        chown(ndst, sstat.st_uid, sstat.st_gid);
+                        chmod(ndst, sstat.st_mode & ALLPERMS);
+                        setTimes(ndst, &sstat);
+                        chflags(ndst, sstat.st_flags);
                      }
+
+                     if (dirCreated)
+                        gTotalItems++;
+                  }
+
+                  else
+                  {
+                     rc = errno;
+                     strerror_r(abs(rc), errorString, errStrLen);
+                     printf("\nDestination directory %s could not be created: %s.\n", ndst, errorString);
                   }
 
                   free(nsrc);
@@ -885,50 +981,61 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                   break;
 
                case DT_REG:      //  8 - A regular file.
-                  if (stat(nsrc, &st) == NO_ERROR)
-                     if (st.st_nlink == 1)
+                  if (sstat.st_nlink == 1)
+                     if (sstat.st_size > 0)
                      {
-                        if (st.st_size > 0)
-                        {
-                           fCount++;
-                           lastID = ++fileID;
-                           fileCopy(fileID, nsrc, ndst, &st);
-                        }
-                        else
-                        {
-                           rc = fileEmpty(nsrc, ndst, &st);
-                           if (rc != NO_ERROR)
-                           {
-                              strerror_r(abs(rc), errorString, errStrLen);
-                              printf("\nCreating file %s in %s failed: %s.\n", ep->d_name, dst, errorString);
-                           }
-                        }
+                        fCount++;
+                        lastID = ++fileID;
+                        fileCopy(fileID, nsrc, ndst, &sstat);
                      }
 
                      else
                      {
-                        rc = hlnkCopy(nsrc, ndst, ndl, &st);
-                        if (rc != NO_ERROR)
+                        if ((rc = fileEmpty(nsrc, ndst, &sstat)) != NO_ERROR)
                         {
                            strerror_r(abs(rc), errorString, errStrLen);
-                           printf("\nCopying file or hard link %s from %s to %s failed: %s.\n", ep->d_name, src, dst, errorString);
+                           printf("\nCreating file %s in %s failed: %s.\n", sep->d_name, dst, errorString);
                         }
                      }
 
                   else
-                  {
-                     free(nsrc);
-                     free(ndst);
-                  }
+                     if ((rc = hlnkCopy(nsrc, ndst, ndl, &sstat)) != NO_ERROR)
+                     {
+                        strerror_r(abs(rc), errorString, errStrLen);
+                        printf("\nCopying file or hard link %s from %s to %s failed: %s.\n", sep->d_name, src, dst, errorString);
+                     }
                   break;
 
                case DT_LNK:      // 10 - A symbolic link.
-                  rc = slnkCopy(nsrc, ndst);
-                  if (rc != NO_ERROR)
+                  if ((rc = slnkCopy(nsrc, ndst, &sstat)) != NO_ERROR)
                   {
                      strerror_r(abs(rc), errorString, errStrLen);
-                     printf("\nCopying symbolic link %s from %s to %s failed: %s.\n", ep->d_name, src, dst, errorString);
+                     printf("\nCopying symbolic link %s from %s to %s failed: %s.\n", sep->d_name, src, dst, errorString);
                   }
+                  break;
+
+               default:
+               case DT_UNKNOWN:  //  0 - The type is unknown.
+                  ftype = "of unknown type";
+                  goto special;
+               case DT_FIFO:     //  1 - A named pipe or FIFO.
+                  ftype = "a named pipe or FIFO";
+                  goto special;
+               case DT_CHR:      //  2 - A character device.
+                  ftype = "a character device";
+                  goto special;
+               case DT_BLK:      //  6 - A block device.
+                  ftype = "a block device";
+                  goto special;
+               case DT_SOCK:     // 12 - A local-domain socket.
+                  ftype = "a local-domain socket";
+                  goto special;
+               case DT_WHT:      // 14 - A whiteout file. (somehow deleted, but not eventually yet)
+                  ftype = "a unsupported whiteout file";
+               special:
+                  printf("\n%s is %s, and it is not copied.\n", nsrc, ftype);
+                  free(nsrc);
+                  free(ndst);
                   break;
             }
          }
@@ -946,7 +1053,32 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
          }
          pthread_mutex_unlock(&level_mutex);
       }
+
+      if (gIncremental)
+         releaseTable(syncEntities);
+
+      else if (gSynchronize)
+      {
+         // need to delete entities not been treated above
+         uint i, n = *(uint *)syncEntities;
+         for (i = 1; i <= n; i++)
+            if (syncEntities[i])
+               deleteEntityTree(syncEntities[i], dst, dl);
+         free(syncEntities);
+      }
    }
+}
+
+
+bool ynPrompt(const char *request, const char *object, int defponse)
+{
+   printf(request, object, defponse);
+
+   int response = getchar();
+   if (response == '\n' || response == '\r')
+      response = defponse;
+
+   return (response == 'y' || response == 'Y') ? true : false;
 }
 
 
@@ -956,23 +1088,22 @@ void usage(const char *executable)
    while (--r >= executable && *r != '/'); r++;
    printf("File tree cloning by Dr. Rolf Jansen, Cyclaero Ltda. (c) 2013 - %s\n\n", svnrev);
    printf("\
-Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-x exclude-list] [-X excl-list-file] [-h|-?|?] source/ destination/\n\n\
+Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-x exclude-list] [-X excl-list-file] [-y] [-h|-?|?] source/ destination/\n\n\
        -c roff|woff|rwoff  Selectively turn off the file system cache for reading or writing\n\
                            or for reading and writing -- the caches are on by default.\n\n\
+       The options -d, -i, -s are mutually exclusive:\n\
        -d                  Delete the contents of the destination before cloning, but do not\n\
                            remove the destination directory or mount point itself. Stop on error.\n\n\
-"/*
-       The options -d, -i, -s are mutually exclusive:\n\
        -i                  Incrementally add new content to or change content in the destination,\n\
                            but do not touch content in destination that does not exist in source.\n\n\
        -s                  Completely synchronize destination with source.\n\n\
-*/"\
        -x exclude-list     Colon separated list of entity names or full path names to be\n\
                            excluded from cloning. Use full path names to single out exactly\n\
                            one item. Use entity names, if all existing entities having that name\n\
                            should be excluded.\n\
                            For example:  -x \".snap:/.sujournal:.DS_Store:/fullpath/to a/volatile cache\"\n\n\
        -X excl-list-file   File containig a list of entity names or full path names to be excluded -- one item per line.\n\n\
+       -y                  Automatically answer with y(es) to y|n confirmation prompts.\n\n\
        -h|-?|?             Show these usage instructions.\n\n\
        source/             Path to the source directory or moint point. The final '/' may be omitted.\n\n\
        destination/        Path to the destination directory or moint point. If the destination\n\
@@ -985,11 +1116,11 @@ int main(int argc, char *const argv[])
    int    optchr;
    size_t homelen = 0;
    char   ch, *o, *p, *q, *usrhome, *cmd = argv[0];
-   bool   d_flag = false, i_flag = false, s_flag = false;
+   bool   d_flag = false, i_flag = false, s_flag = false, y_flag = false;
    FILE  *exclf;
    struct stat exclst;
 
-   while ((optchr = getopt(argc, argv, "c:disx:X:h?")) != -1)
+   while ((optchr = getopt(argc, argv, "c:disx:X:yh?")) != -1)
       switch (optchr)
       {
          case 'c':   // selectively turn off the file system cache for reading or writing or for reading and writing
@@ -1034,7 +1165,7 @@ int main(int argc, char *const argv[])
                   q++;
                *q++ = '\0';
                if (*p)
-                  storeFSName(gExcludeList, p, strlen(p), 0);
+                  storeFSName(gExcludeList, p, strlen(p), NULL);
                p = q;
             } while (ch);
             break;
@@ -1058,7 +1189,7 @@ int main(int argc, char *const argv[])
                   if (!gExcludeList)
                      gExcludeList = createTable(256);
 
-                  o = p = alloca(exclst.st_size + 1);
+                  p = alloca(exclst.st_size + 1);
                   if (fread(p, exclst.st_size, 1, exclf) == 1)
                   {
                      for (q = p + exclst.st_size - 1; q > p && (*q == '\n' || *q == '\r'); q--);   // strip trailing line breaks
@@ -1072,7 +1203,7 @@ int main(int argc, char *const argv[])
                               q++;
                            *q++ = '\0';
                            if (*p)
-                              storeFSName(gExcludeList, p, strlen(p), 0);
+                              storeFSName(gExcludeList, p, strlen(p), NULL);
                            p = q;
                         } while (ch);
                      }
@@ -1084,6 +1215,10 @@ int main(int argc, char *const argv[])
 
             else
                goto arg_err;
+            break;
+
+         case 'y':
+            y_flag = true;
             break;
 
          case 'h':
@@ -1154,7 +1289,10 @@ int main(int argc, char *const argv[])
    else if ((dstat.st_mode & S_IFMT) != S_IFDIR)
       printf("Destination %s is not a directory.\n", argv[1]);
 
-   else if (d_flag && (rc = dirDelete(dst, dl)) != NO_ERROR)
+   else if (d_flag && !y_flag && !ynPrompt("Do you really want to delete the content of %s?\nThe deletion cannot be undone. -- y(es, do delete) | n(o, do not delete) [%c]?: ", argv[1], 'n'))
+      printf("The deletion of the content of %s was not confirmed by the user.\n", argv[1]);
+
+   else if (d_flag && (rc = deleteDirectory(dst, dl)) != NO_ERROR)
       printf("The content of the destination directory %s could not be deleted: %s.\n", argv[1], strerror(rc));
 
    else
@@ -1164,7 +1302,7 @@ int main(int argc, char *const argv[])
       gettimeofday(&t0, NULL);
 
       gSourceDev  = sstat.st_dev;
-      gLinkINodes = createTable(8192);
+      gHLinkINodes = createTable(8192);
 
       // Initialze the dispensers
       for (i = 0; i < maxChunkCount; i++)
@@ -1201,13 +1339,13 @@ int main(int argc, char *const argv[])
       gRunning = false;
       pthread_cond_signal(&reader_cond);
       pthread_cond_signal(&writer_cond);
-      releaseTable(gLinkINodes);
+      releaseTable(gHLinkINodes);
       releaseTable(gExcludeList);
 
       gettimeofday(&t1, NULL);
       double t = t1.tv_sec - t0.tv_sec + (t1.tv_usec - t0.tv_usec)/1.0e6;
       gTotalSize /= 1048576.0;
-      printf("\n%.1f MB in %.2f s -- %.1f MB/s\n\n", gTotalSize, t, gTotalSize/t);
+      printf("\n%llu items copied, %.1f MB in %.2f s -- %.1f MB/s\n\n", gTotalItems, gTotalSize, t, gTotalSize/t);
 
       return 0;
    }

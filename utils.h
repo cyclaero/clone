@@ -46,13 +46,7 @@ typedef long long          llong;
 typedef unsigned long long ullong;
 
 
-static inline struct timeval *utimeset(struct stat *st, struct timeval *tv)
-{
-   tv[0].tv_sec = st->st_atimespec.tv_sec, tv[0].tv_usec = (int)(st->st_atimespec.tv_nsec/1000);
-   tv[1].tv_sec = st->st_mtimespec.tv_sec, tv[1].tv_usec = (int)(st->st_mtimespec.tv_nsec/1000);
-   return tv;
-}
-
+void setTimes(const char *dst, struct stat *st);
 void setAttributes(const char *src, const char *dst, struct stat *st);
 
 #pragma mark ••• Copying extended Meta Data - EAs & ACLs •••
@@ -159,5 +153,5 @@ Node   *storeINode(Node *table[], ulong key, const char *fsname, size_t namlen, 
 void   removeINode(Node *table[], ulong key);
 
 Node   *findFSName(Node *table[], const char *fsname, size_t namlen);
-Node  *storeFSName(Node *table[], const char *fsname, size_t namlen, long dev);
+Node  *storeFSName(Node *table[], const char *fsname, size_t namlen, Value *value);
 void  removeFSName(Node *table[], const char *fsname, size_t namlen);
