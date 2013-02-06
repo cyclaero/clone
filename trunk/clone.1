@@ -28,24 +28,25 @@
 .\"man mdoc.samples for a complete listing of options
 .\"man mdoc for the short list of editing options
 .\"/usr/share/misc/mdoc.template
-.Dd 2013-02-03                \" DATE 
-.Dt clone 1 URM               \" Program name and manual section number
+.Dd 2013-02-07                         \" DATE 
+.Dt clone 1 URM                        \" Program name and manual section number
 .Os FreeBSD, Darwin
-.Sh NAME                      \" Section Header - required - don't modify 
+.Sh NAME                               \" Section Header - required - don't modify 
 .Nm clone
 .\" The following lines are read in generating the apropos(man -k) database. Use only key
 .\" words here as the database is built based on the words here and in the .ND line. 
 .\" Use .Nm macro to designate other names for the documented program.
 .Nd File tree cloning.
-.Sh SYNOPSIS                  \" Section Header - required - don't modify
+.Sh SYNOPSIS                           \" Section Header - required - don't modify
 .Nm
 .Op Fl c Ar roff|woff|rwoff            \" [-c roff|woff|rwoff]
 .Op Fl d Ns | Ns Fl i Ns | Ns Fl s     \" [-d|-i|-s]
 .Op Fl x Ar exclude-list               \" [-a exclude-list]
 .Op Fl X Ar excl-list-file             \" [-X excl-list-file]
+.Op Fl y                               \" [-y]
 .Op Fl h Ns | Ns Fl \&? Ns | Ns Sy \&? \" [-h|-?|?]
-.Ar source/                            \" obligatory
-.Ar destination/                       \" obligatory
+.Ar source/                            \" required argument
+.Ar destination/                       \" required argument
 .Sh DESCRIPTION                        \" Section Header - required - don't modify
 .Nm
 is a file tree cloning tool which runs 3 threads - a scheduler (main), a reader, and a writer thread.
@@ -60,22 +61,33 @@ For example, cloning a whole file hierarchy of in total 2.3 TBytes of data from 
 average transfer rate for all kind of files (very small up to very big ones) was about 89 MByte/s.
 .Pp
 .Nm
-is useful for cloning (thus backing-up) live file systems. Works on FreeBSD and Darwin (Mac OS X).
+is useful for cloning (thus backing-up) live file systems. It works on FreeBSD and Darwin (Mac OS X).
 .Pp                           \" Inserts a space
-The following options are available:
+\fBOptional flags:\fP
 .Bl -tag -width -indent       \" Begins a tagged list, each item preceded by .It macro
-.It Fl c Ar roff|woff|rwoff
+.It Fl c Ar roff | woff | rwoff
 Selectively turn off the file system cache for reading or writing or for reading and writing -- the caches are on by default.
+.It The options -d, -i, -s are mutually exclusive:
 .It Fl d
-Delete the contents of the destination before cloning, but do not remove the destination directory or mount point itself. Stop on error.
+Delete the contents of the destination before cloning, but do not remove the destination directory or mount point itself. Stop on error. Deletion requires user confirmation, unless it is confirmend inhenrently bye the \fB-y\fP flag. Be careful, deletion cannot be undone!
+.It Fl i
+Incrementally add new content to or change content in the destination, but do not touch content in destination that does not exist in source.
+.It Fl s
+Completely synchronize destination with source.
 .It Fl x Ar exclude-list
 Colon separated list of entity names or full path names to be excluded from cloning. Use full path names to single out exactly one item. Use entity names, if all existing entities having that name should be excluded.
 .It For example:
 -x ".snap:/.sujournal:.DS_Store:/fullpath/to a/volatile cache"
 .It Fl X Ar excl-list-file
 File containig a list of entity names or full path names to be excluded -- one item per line.
-.It Fl h Ns | Ns Fl \&? Ns | Ns Sy \&?
+.It Fl y
+Automatically answer with y(es) to y|n confirmation prompts.
+.It Fl h | Fl \&? | Sy \&?
 Show the usage instructions.
+.El                           \" Ends the list
+.Pp                           \" Inserts a space
+\fBRequired arguments:\fP
+.Bl -tag -width -indent       \" Begins a tagged list, each item preceded by .It macro
 .It Ar source/
 Path to the source directory or moint point to be cloned. The final '/' may be omitted.
 .It Ar destination/
