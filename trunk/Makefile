@@ -31,7 +31,7 @@ SVNREV != svnversion
 .endif
 
 CC      = clang
-CFLAGS  = $(CDEFS) -DSVNREV="$(SVNREV)" -O3 -std=c99 -Wno-switch -Wno-parentheses -Wno-empty-body
+CFLAGS  = $(CDEFS) -DSVNREV="$(SVNREV)" -O3 -std=c99 -Wno-switch -Wno-parentheses
 LDFLAGS = -lpthread
 
 HEADER  = utils.h
