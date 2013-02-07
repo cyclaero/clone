@@ -317,15 +317,15 @@ void releaseValue(Value *value)
    {
       case Simple:
       case Data:
-         free(value->p);
+         free(value->v.p);
          break;
 
       case String:
-         free(value->s);
+         free(value->v.s);
          break;
 
       case Dictionary:
-         releaseTable((Node **)value->p);
+         releaseTable((Node **)value->v.p);
          break;
    }
 }
@@ -751,7 +751,7 @@ Node *findINode(Node *table[], ulong inode)
 Node *storeINode(Node *table[], ulong inode, const char *fsname, size_t namlen, long dev)
 {
    uint  n = *(uint *)table;
-   Value value; value.kind = Simple, value.i = dev;
+   Value value; value.kind = Simple, value.v.i = dev;
    Node *passed;
    addTreeNode(inode, fsname, namlen, &value, &table[inode%n + 1], &passed);
    return passed;
