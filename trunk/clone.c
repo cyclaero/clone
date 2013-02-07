@@ -1070,6 +1070,34 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
 }
 
 
+bool intersectPaths(char *src, char *dst)
+{
+   bool  chk = true;    // assume intersection
+   char *srp, *drp;
+
+   if (srp = realpath(src, NULL))
+      if (drp = realpath(dst, NULL))
+      {
+         size_t srl = strlen(srp);
+         size_t drl = strlen(drp);
+         if (chk = (strstr(drp, srp) == drp && (srl == drl || drp[srl] == '/')))
+            printf("Absolute destination %s must not be a child of the source path %s.", drp, srp);
+         free(srp);
+         free(drp);
+      }
+
+      else
+      {
+         free(srp);
+         printf("Destination path %s is invalid.", dst);
+      }
+
+   else
+      printf("Source path %s is invalid.", src);
+
+   return chk;
+}
+
 bool ynPrompt(const char *request, const char *object, int defponse)
 {
    printf(request, object, defponse);
@@ -1080,7 +1108,6 @@ bool ynPrompt(const char *request, const char *object, int defponse)
 
    return (response == 'y' || response == 'Y') ? true : false;
 }
-
 
 void usage(const char *executable)
 {
@@ -1274,22 +1301,30 @@ int main(int argc, char *const argv[])
    if (dst[dl-1] != '/')
       *(short *)&dst[dl++] = *(short *)"/";
 
-   // 2. check whether the paths do exist and lead to directories
+   // 2. check whether the paths do exist, lead to directories, and make sure that destination is not inherited by source 
+   bool   dirCreated = false;
    int    rc;
    struct stat sstat, dstat;
    if (stat(src, &sstat) != NO_ERROR)
       printf("The source directory %s does not exist.\n", argv[0]);
 
-   else if ((sstat.st_mode & S_IFMT) != S_IFDIR)
+   else if (!S_ISDIR(sstat.st_mode))
       printf("Source %s is not a directory.\n", argv[0]);
 
    else if (stat(dst, &dstat) != NO_ERROR &&
-            ((d_flag = (mkdir(dst, sstat.st_mode & ALLPERMS) != NO_ERROR)) ||    // in the case of a successfull mkdir(), d_flag is set to false
-             stat(dst, &dstat) != NO_ERROR))                                     // this prevents deleteDir() from running on an empty directory.
+            ((d_flag = !(dirCreated = (mkdir(dst, sstat.st_mode & ALLPERMS) == NO_ERROR))) ||   // in the case of a successfull mkdir(), d_flag is set to false
+             stat(dst, &dstat) != NO_ERROR))                                                    // this prevents deleteDir() from running on an empty directory.
       printf("The destination directory %s did not exist and a new one could not be created: %s.\n", argv[1], strerror(errno));
 
-   else if ((dstat.st_mode & S_IFMT) != S_IFDIR)
+   else if (!dirCreated && !S_ISDIR(dstat.st_mode))
       printf("Destination %s is not a directory.\n", argv[1]);
+
+   else if (sstat.st_dev == dstat.st_dev && intersectPaths(src, dst))
+   {
+      // exact failure message has been output in intersectPaths()
+      if (dirCreated)
+         rmdir(dst);
+   }
 
    else if (d_flag && !y_flag && !ynPrompt("Do you really want to delete the content of %s?\nThe deletion cannot be undone. -- y(es, do delete) | n(o, do not delete) [%c]?: ", argv[1], 'n'))
       printf("The deletion of the content of %s was not confirmed by the user.\n", argv[1]);
@@ -1303,8 +1338,10 @@ int main(int argc, char *const argv[])
       struct timeval t0, t1;
       gettimeofday(&t0, NULL);
 
-      gSourceDev  = sstat.st_dev;
+      gSourceDev   = sstat.st_dev;
       gHLinkINodes = createTable(8192);
+      if (dirCreated)
+         gTotalItems++;
 
       // Initialze the dispensers
       for (i = 0; i < maxChunkCount; i++)
