@@ -53,7 +53,7 @@ $(TOOLOBJ):
 clean:
 	rm -rf *.o *.core $(TOOL)
 
-update: clean
+update: clean all
 
 install: $(TOOL)
 	strip -x -o /usr/local/bin/$(TOOL) $(TOOL)
