@@ -613,7 +613,7 @@ int hlnkCopy(char *src, char *dst, size_t dl, struct stat *st)
    int    rc;
    Node  *ino = findINode(gHLinkINodes, st->st_ino);
 
-   if (ino && ino->value.i == st->st_dev)
+   if (ino && ino->value.v.i == st->st_dev)
    {
       chflags(ino->name, 0);
       rc = (link(ino->name, dst) == NO_ERROR) ? 0 : DST_ERROR;
@@ -815,7 +815,7 @@ int deleteEntityTree(Node *syncNode, const char *path, size_t pl)
 
    size_t npl   = pl + strlen(syncNode->name);
    char  *npath = strcpy(malloc(npl+2), path); strcpy(npath+pl, syncNode->name);
-   rc = deleteDirEntity(npath, npl, syncNode->value.i);
+   rc = deleteDirEntity(npath, npl, syncNode->value.v.i);
    free(npath);
 
    free(syncNode->name);
@@ -846,7 +846,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
          if ( dep->d_name[0] != '.' || (dep->d_name[1] != '\0' &&
              (dep->d_name[1] != '.' ||  dep->d_name[2] != '\0')))
          {
-            switch (value.i = dep->d_type)
+            switch (value.v.i = dep->d_type)
             {
                case DT_DIR:      //  4 - A directory.
                case DT_REG:      //  8 - A regular file.
@@ -903,7 +903,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
             if (syncEntities &&    // only non-NULL in incremental or synchronize mode
                 (syncNode = findFSName(syncEntities, sep->d_name, sep->d_namlen)))
             {
-               long d_type = syncNode->value.i;
+               long d_type = syncNode->value.v.i;
                removeFSName(syncEntities, sep->d_name, sep->d_namlen);
 
                // This file system name is already present at the destination,
@@ -1085,7 +1085,9 @@ bool ynPrompt(const char *request, const char *object, int defponse)
 void usage(const char *executable)
 {
    const char *r = executable + strlen(executable);
-   while (--r >= executable && *r != '/'); r++;
+   while (--r >= executable && *r != '/')
+      ;
+   r++;
    printf("File tree cloning by Dr. Rolf Jansen, Cyclaero Ltda. (c) 2013 - %s\n\n", svnrev);
    printf("\
 Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-x exclude-list] [-X excl-list-file] [-y] [-h|-?|?] source/ destination/\n\n\

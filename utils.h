@@ -114,7 +114,7 @@ typedef struct
       time_t  t;  // a time stamp
       char   *s;  // a string
       void   *p;  // a pointer to anything
-   };
+   } v;
 } Value;
 
 void releaseValue(Value *value);
