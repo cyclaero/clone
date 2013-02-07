@@ -947,8 +947,8 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
             switch (sep->d_type)
             {
                case DT_DIR:      //  4 - A directory.
-                  if ((dstat.st_ino != 0      || stat(ndst, &dstat) == NO_ERROR) &&
-                      (S_ISDIR(dstat.st_mode) || (dirCreated = (mkdir(ndst, sstat.st_mode & ALLPERMS) == NO_ERROR))))
+                  if ((dstat.st_ino != 0 || stat(ndst, &dstat) == NO_ERROR) && S_ISDIR(dstat.st_mode) ||
+                       dstat.st_ino == 0 && (dirCreated = (mkdir(ndst, sstat.st_mode & ALLPERMS) == NO_ERROR)))
                   {
                      putc('.', stdout); fflush(stdout);
                      *(short *)&nsrc[nsl++] = *(short *)&ndst[ndl++] = *(short *)"/";
