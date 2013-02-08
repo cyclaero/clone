@@ -1387,10 +1387,16 @@ int main(int argc, char *const argv[])
       releaseTable(gHLinkINodes);
       releaseTable(gExcludeList);
 
-      gettimeofday(&t1, NULL);
-      double t = t1.tv_sec - t0.tv_sec + (t1.tv_usec - t0.tv_usec)/1.0e6;
-      gTotalSize /= 1048576.0;
-      printf("\n%llu items copied, %.1f MB in %.2f s -- %.1f MB/s\n\n", gTotalItems, gTotalSize, t, gTotalSize/t);
+      if (gTotalItems)
+      {
+         gettimeofday(&t1, NULL);
+         double t = t1.tv_sec - t0.tv_sec + (t1.tv_usec - t0.tv_usec)/1.0e6;
+         gTotalSize /= 1048576.0;
+         printf("\n%llu items copied, %.1f MB in %.2f s -- %.1f MB/s\n\n", gTotalItems, gTotalSize, t, gTotalSize/t);
+      }
+
+      else
+         printf("\nNo items copied.\n");
 
       return 0;
    }
