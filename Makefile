@@ -30,7 +30,7 @@ SVNREV != svn update > /dev/null && svnversion
 SVNREV != svnversion
 .endif
 
-CC      = clang
+CC     ?= clang
 CFLAGS  = $(CDEFS) -DSVNREV="$(SVNREV)" -O3 -std=c99 -Wno-switch -Wno-parentheses
 LDFLAGS = -lpthread
 
