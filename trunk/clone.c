@@ -910,7 +910,8 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                // but is it really exactly the same file or entity?
                if (d_type == sep->d_type &&
                    stat(ndst, &dstat) == NO_ERROR &&
-                   dstat.st_size                  == sstat.st_size &&
+                  (d_type == DT_DIR ||
+                   dstat.st_size                  == sstat.st_size) &&
                    dstat.st_uid                   == sstat.st_uid &&
                    dstat.st_gid                   == sstat.st_gid &&
                    dstat.st_mode                  == sstat.st_mode &&
