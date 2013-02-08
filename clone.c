@@ -915,8 +915,9 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                    dstat.st_gid                   == sstat.st_gid &&
                    dstat.st_mode                  == sstat.st_mode &&
                    dstat.st_flags                 == sstat.st_flags &&
+                  (d_type == DT_DIR ||
                    dstat.st_mtimespec.tv_sec      == sstat.st_mtimespec.tv_sec &&
-                   dstat.st_mtimespec.tv_nsec     == sstat.st_mtimespec.tv_nsec &&
+                   dstat.st_mtimespec.tv_nsec     == sstat.st_mtimespec.tv_nsec) &&
                    dstat.st_birthtimespec.tv_sec  == sstat.st_birthtimespec.tv_sec &&
                    dstat.st_birthtimespec.tv_nsec == sstat.st_birthtimespec.tv_nsec)
                {
@@ -931,7 +932,10 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
 
                // No, it has the same name, but it is somehow different.
                // So, try to delete it from the destination before continuing.
-               else if (deleteDirEntity(ndst, ndl, d_type) != NO_ERROR)
+               else if (deleteDirEntity(ndst, ndl, d_type) == NO_ERROR)
+                  dstat.st_ino = 0;
+
+               else
                {
                   // If it cannot be deleted, it cannot be overwritten either.
                   // A message has already been dropped, and there is nothing
@@ -1054,18 +1058,19 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
          pthread_mutex_unlock(&level_mutex);
       }
 
-      if (gIncremental)
-         releaseTable(syncEntities);
+      if (syncEntities)
+         if (gIncremental)
+            releaseTable(syncEntities);
 
-      else if (gSynchronize)
-      {
-         // need to delete entities not been treated above
-         uint i, n = *(uint *)syncEntities;
-         for (i = 1; i <= n; i++)
-            if (syncEntities[i])
-               deleteEntityTree(syncEntities[i], dst, dl);
-         free(syncEntities);
-      }
+         else if (gSynchronize)
+         {
+            // need to delete entities not been treated above
+            uint i, n = *(uint *)syncEntities;
+            for (i = 1; i <= n; i++)
+               if (syncEntities[i])
+                  deleteEntityTree(syncEntities[i], dst, dl);
+            free(syncEntities);
+         }
    }
 }
 
