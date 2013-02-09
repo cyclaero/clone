@@ -24,14 +24,19 @@
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
+.if exists(.svn)
 .ifmake update
-SVNREV != svn update > /dev/null && svnversion
+REVNUM != svn update | tail -1 | cut -d " " -f3 | cut -d "." -f1
 .else
-SVNREV != svnversion
+REVNUM != svnversion
+.endif
+SVNREV  = SVNREV="$(REVNUM)"
+.else
+SVNREV != cat svnrev.xcconfig
 .endif
 
 CC     ?= clang
-CFLAGS  = $(CDEFS) -DSVNREV="$(SVNREV)" -O3 -std=c99 -Wno-switch -Wno-parentheses
+CFLAGS  = $(CDEFS) -D$(SVNREV) -O3 -std=c99 -Wno-switch -Wno-parentheses
 LDFLAGS = -lpthread
 
 HEADER  = utils.h

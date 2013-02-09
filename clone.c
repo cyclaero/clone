@@ -44,7 +44,7 @@
 #include "utils.h"
 
 
-static const char *svnrev = "(r"STRINGIFY(SVNREV)")";
+static const char *version = "Version 1.0.0 (r"STRINGIFY(SVNREV)")";
 
 dev_t  gSourceDev;
 
@@ -1121,7 +1121,7 @@ void usage(const char *executable)
    while (--r >= executable && *r != '/')
       ;
    r++;
-   printf("File tree cloning by Dr. Rolf Jansen, Cyclaero Ltda. (c) 2013 - %s\n\n", svnrev);
+   printf("File tree cloning by Dr. Rolf Jansen, Cyclaero Ltda. (c) 2013 - %s\n\n", version);
    printf("\
 Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-x exclude-list] [-X excl-list-file] [-y] [-h|-?|?] source/ destination/\n\n\
        -c roff|woff|rwoff  Selectively turn off the file system cache for reading or writing\n\
@@ -1375,7 +1375,7 @@ int main(int argc, char *const argv[])
          return 1;
       }
 
-      printf("File tree cloning by Dr. Rolf Jansen, Cyclaero Ltda. (c) 2013 - %s\nclone %s %s\n", svnrev, src, dst);
+      printf("File tree cloning by Dr. Rolf Jansen, Cyclaero Ltda. (c) 2013 - %s\nclone %s %s\n", version, src, dst);
 
       putc('.', stdout); fflush(stdout);
       clone(src, sl, dst, dl);
