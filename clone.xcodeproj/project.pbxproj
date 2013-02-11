@@ -28,10 +28,9 @@
 		7E48627316A345CA008E0F01 /* clone.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = clone.c; sourceTree = "<group>"; };
 		7E48628416A376FD008E0F01 /* utils.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = utils.c; sourceTree = "<group>"; };
 		7E48628616A37741008E0F01 /* utils.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = utils.h; sourceTree = "<group>"; };
-		7E67492716BDC167009036B2 /* clone.1 */ = {isa = PBXFileReference; lastKnownFileType = text.man; path = clone.1; sourceTree = "<group>"; };
+		7E67492716BDC167009036B2 /* clone.1 */ = {isa = PBXFileReference; explicitFileType = text.man; lineEnding = 0; path = clone.1; sourceTree = "<group>"; };
 		7ED7608C16AD6325000A566D /* svnrev.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = svnrev.xcconfig; sourceTree = "<group>"; };
 		7ED760A316AD6A02000A566D /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
-		7EFBFD4616AD8807001484E7 /* related stuff */ = {isa = PBXFileReference; lastKnownFileType = folder; path = "related stuff"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -55,7 +54,6 @@
 				7ED760A316AD6A02000A566D /* Makefile */,
 				7ED7608C16AD6325000A566D /* svnrev.xcconfig */,
 				7E48627016A345CA008E0F01 /* Products */,
-				7EFBFD4616AD8807001484E7 /* related stuff */,
 			);
 			sourceTree = "<group>";
 		};
