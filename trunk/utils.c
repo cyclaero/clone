@@ -72,12 +72,11 @@ void setAttributes(const char *src, const char *dst, struct stat *st)
 
    lchown(dst, st->st_uid, st->st_gid);
    lchmod(dst, st->st_mode & ALLPERMS);
+   lchflags(dst, st->st_flags);
 
    getMetaData(src, &xmd);
    setMetaData(dst, &xmd);
    setTimes(dst, st);
-
-   lchflags(dst, st->st_flags);
 }
 
 
