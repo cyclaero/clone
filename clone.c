@@ -720,15 +720,15 @@ cleanup:
 
 int deleteDirectory(char *path, size_t pl);
 
-int deleteDirEntity(char *path, size_t pl, long d_type)
+int deleteDirEntity(char *path, size_t pl, long st_mode)
 {
    static char errorString[errStrLen];
    const char *ftype;
    int err, rc = NO_ERROR;
 
-   switch (d_type)
+   switch (st_mode & S_IFMT)
    {
-      case DT_DIR:      //  4 - A directory.
+      case S_IFDIR:      // A directory.
          *(short *)&path[pl++] = *(short *)"/";
          chflags(path, 0);
          if (err = deleteDirectory(path, pl))
@@ -741,8 +741,8 @@ int deleteDirEntity(char *path, size_t pl, long d_type)
          }
          break;
 
-      case DT_REG:      //  8 - A regular file.
-      case DT_LNK:      // 10 - A symbolic link.
+      case S_IFREG:      // A regular file.
+      case S_IFLNK:      // A symbolic link.
          lchflags(path, 0);
          if (unlink(path) != NO_ERROR)
          {
@@ -753,22 +753,21 @@ int deleteDirEntity(char *path, size_t pl, long d_type)
          break;
 
       default:
-      case DT_UNKNOWN:  //  0 - The type is unknown.
          ftype = "of unknown type";
          goto special;
-      case DT_FIFO:     //  1 - A named pipe or FIFO.
+      case S_IFIFO:      // A named pipe or FIFO.
          ftype = "a named pipe or FIFO";
          goto special;
-      case DT_CHR:      //  2 - A character device.
+      case S_IFCHR:      // A character device.
          ftype = "a character device";
          goto special;
-      case DT_BLK:      //  6 - A block device.
+      case S_IFBLK:      // A block device.
          ftype = "a block device";
          goto special;
-      case DT_SOCK:     // 12 - A local-domain socket.
+      case S_IFSOCK:     // A local-domain socket.
          ftype = "a local-domain socket";
          goto special;
-      case DT_WHT:      // 14 - A whiteout file. (somehow deleted, but not eventually yet)
+      case S_IFWHT:      // A whiteout file. (somehow deleted, but not eventually yet)
          ftype = "a unsupported whiteout file";
       special:
          printf("\n%s is %s, it could not be deleted.\n", path, ftype);
@@ -840,18 +839,17 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
    if ((gIncremental || gSynchronize) &&
        (ddp = opendir(dst)))
    {
-      Value  value = {Simple};
       syncEntities = createTable(1024);
       while (readdir_r(ddp, &bep, &dep) == NO_ERROR && dep)
          if ( dep->d_name[0] != '.' || (dep->d_name[1] != '\0' &&
              (dep->d_name[1] != '.' ||  dep->d_name[2] != '\0')))
          {
-            switch (value.v.i = dep->d_type)
+            switch (dep->d_type)
             {
                case DT_DIR:      //  4 - A directory.
                case DT_REG:      //  8 - A regular file.
                case DT_LNK:      // 10 - A symbolic link.
-                  storeFSName(syncEntities, dep->d_name, dep->d_namlen, &value);
+                  storeFSName(syncEntities, dep->d_name, dep->d_namlen, NULL);
                   break;
 
                default:
@@ -889,7 +887,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
             struct stat sstat;
 
             if (gExcludeList && findFSName(gExcludeList, nsrc, nsl) ||
-                stat(nsrc, &sstat) != NO_ERROR)
+                lstat(nsrc, &sstat) != NO_ERROR)
             {
                free(nsrc);
                continue;
@@ -903,26 +901,24 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
             if (syncEntities &&    // only non-NULL in incremental or synchronize mode
                 (syncNode = findFSName(syncEntities, sep->d_name, sep->d_namlen)))
             {
-               long d_type = syncNode->value.v.i;
                removeFSName(syncEntities, sep->d_name, sep->d_namlen);
 
                // This file system name is already present at the destination,
                // but is it really exactly the same file or entity?
-               if (d_type == sep->d_type &&
-                   stat(ndst, &dstat) == NO_ERROR &&
-                  (d_type == DT_DIR ||
+               if (lstat(ndst, &dstat) == NO_ERROR &&
+                  (S_ISDIR(dstat.st_mode) ||
                    dstat.st_size                  == sstat.st_size) &&
                    dstat.st_uid                   == sstat.st_uid &&
                    dstat.st_gid                   == sstat.st_gid &&
                    dstat.st_mode                  == sstat.st_mode &&
                    dstat.st_flags                 == sstat.st_flags &&
-                  (d_type == DT_DIR ||
+                  (S_ISDIR(dstat.st_mode) ||
                    dstat.st_mtimespec.tv_sec      == sstat.st_mtimespec.tv_sec &&
                    dstat.st_mtimespec.tv_nsec     == sstat.st_mtimespec.tv_nsec) &&
                    dstat.st_birthtimespec.tv_sec  == sstat.st_birthtimespec.tv_sec &&
                    dstat.st_birthtimespec.tv_nsec == sstat.st_birthtimespec.tv_nsec)
                {
-                  if (d_type != DT_DIR)
+                  if (!S_ISDIR(dstat.st_mode))
                   {
                      // Yes, it is, so skip it!
                      free(nsrc);
@@ -933,7 +929,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
 
                // No, it has the same name, but it is somehow different.
                // So, try to delete it from the destination before continuing.
-               else if (deleteDirEntity(ndst, ndl, d_type) == NO_ERROR)
+               else if (deleteDirEntity(ndst, ndl, dstat.st_mode) == NO_ERROR)
                   dstat.st_ino = 0;
 
                else
@@ -949,10 +945,10 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
 
             bool dirCreated = false;
 
-            switch (sep->d_type)
+            switch (sstat.st_mode & S_IFMT)
             {
-               case DT_DIR:      //  4 - A directory.
-                  if ((dstat.st_ino != 0 || stat(ndst, &dstat) == NO_ERROR) && S_ISDIR(dstat.st_mode) ||
+               case S_IFDIR:      // A directory.
+                  if ((dstat.st_ino != 0 || lstat(ndst, &dstat) == NO_ERROR) && S_ISDIR(dstat.st_mode) ||
                        dstat.st_ino == 0 && (dirCreated = (mkdir(ndst, sstat.st_mode & ALLPERMS) == NO_ERROR)))
                   {
                      putc('.', stdout); fflush(stdout);
@@ -966,8 +962,8 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                      {
                         chown(ndst, sstat.st_uid, sstat.st_gid);
                         chmod(ndst, sstat.st_mode & ALLPERMS);
-                        setTimes(ndst, &sstat);
                         chflags(ndst, sstat.st_flags);
+                        setTimes(ndst, &sstat);
                      }
 
                      if (dirCreated)
@@ -985,7 +981,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                   free(ndst);
                   break;
 
-               case DT_REG:      //  8 - A regular file.
+               case S_IFREG:      // A regular file.
                   if (sstat.st_nlink == 1)
                      if (sstat.st_size > 0)
                      {
@@ -1011,7 +1007,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                      }
                   break;
 
-               case DT_LNK:      // 10 - A symbolic link.
+               case S_IFLNK:      // A symbolic link.
                   if ((rc = slnkCopy(nsrc, ndst, &sstat)) != NO_ERROR)
                   {
                      strerror_r(abs(rc), errorString, errStrLen);
@@ -1020,22 +1016,21 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                   break;
 
                default:
-               case DT_UNKNOWN:  //  0 - The type is unknown.
                   ftype = "of unknown type";
                   goto special;
-               case DT_FIFO:     //  1 - A named pipe or FIFO.
+               case S_IFIFO:      // A named pipe or FIFO.
                   ftype = "a named pipe or FIFO";
                   goto special;
-               case DT_CHR:      //  2 - A character device.
+               case S_IFCHR:      // A character device.
                   ftype = "a character device";
                   goto special;
-               case DT_BLK:      //  6 - A block device.
+               case S_IFBLK:      // A block device.
                   ftype = "a block device";
                   goto special;
-               case DT_SOCK:     // 12 - A local-domain socket.
+               case S_IFSOCK:     // A local-domain socket.
                   ftype = "a local-domain socket";
                   goto special;
-               case DT_WHT:      // 14 - A whiteout file. (somehow deleted, but not eventually yet)
+               case S_IFWHT:      // A whiteout file. (somehow deleted, but not eventually yet)
                   ftype = "a unsupported whiteout file";
                special:
                   printf("\n%s is %s, and it is not copied.\n", nsrc, ftype);
@@ -1311,15 +1306,15 @@ int main(int argc, char *const argv[])
    bool   dirCreated = false;
    int    rc;
    struct stat sstat, dstat;
-   if (stat(src, &sstat) != NO_ERROR)
+   if (lstat(src, &sstat) != NO_ERROR)
       printf("The source directory %s does not exist.\n", argv[0]);
 
    else if (!S_ISDIR(sstat.st_mode))
       printf("Source %s is not a directory.\n", argv[0]);
 
-   else if (stat(dst, &dstat) != NO_ERROR &&
+   else if (lstat(dst, &dstat) != NO_ERROR &&
             ((d_flag = !(dirCreated = (mkdir(dst, sstat.st_mode & ALLPERMS) == NO_ERROR))) ||   // in the case of a successfull mkdir(), d_flag is set to false
-             stat(dst, &dstat) != NO_ERROR))                                                    // this prevents deleteDir() from running on an empty directory.
+             lstat(dst, &dstat) != NO_ERROR))                                                   // this prevents deleteDir() from running on an empty directory.
       printf("The destination directory %s did not exist and a new one could not be created: %s.\n", argv[1], strerror(errno));
 
    else if (!dirCreated && !S_ISDIR(dstat.st_mode))
