@@ -962,8 +962,8 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                      {
                         chown(ndst, sstat.st_uid, sstat.st_gid);
                         chmod(ndst, sstat.st_mode & ALLPERMS);
-                        chflags(ndst, sstat.st_flags);
                         setTimes(ndst, &sstat);
+                        chflags(ndst, sstat.st_flags);
                      }
 
                      if (dirCreated)

@@ -66,23 +66,22 @@ void setTimes(const char *dst, struct stat *st)
    lutimes(dst, tv);
 }
 
-void setAttributes(const char *src, const char *dst, struct stat *st)
-{
-   ExtMetaData xmd;
-
-   lchown(dst, st->st_uid, st->st_gid);
-   lchmod(dst, st->st_mode & ALLPERMS);
-   lchflags(dst, st->st_flags);
-
-   getMetaData(src, &xmd);
-   setMetaData(dst, &xmd);
-   setTimes(dst, st);
-}
-
-
 #pragma mark ••• Copying Extended Meta Data - EXAs & ACLs •••
 
 #if defined (__APPLE__)
+
+   void setAttributes(const char *src, const char *dst, struct stat *st)
+   {
+      ExtMetaData xmd;
+
+      lchown(dst, st->st_uid, st->st_gid);
+      lchmod(dst, st->st_mode & ALLPERMS);
+      lchflags(dst, st->st_flags);
+
+      getMetaData(src, &xmd);
+      setMetaData(dst, &xmd);
+      setTimes(dst, st);
+   }
 
    #include <sys/xattr.h>
 
@@ -177,6 +176,20 @@ void setAttributes(const char *src, const char *dst, struct stat *st)
    }
 
 #elif defined (__FreeBSD__)
+
+   void setAttributes(const char *src, const char *dst, struct stat *st)
+   {
+      ExtMetaData xmd;
+
+      lchown(dst, st->st_uid, st->st_gid);
+      lchmod(dst, st->st_mode & ALLPERMS);
+
+      getMetaData(src, &xmd);
+      setMetaData(dst, &xmd);
+      setTimes(dst, st);
+
+      lchflags(dst, st->st_flags);
+   }
 
    #include <sys/extattr.h>
 
