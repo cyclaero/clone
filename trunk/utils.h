@@ -45,8 +45,9 @@ typedef long long          llong;
 typedef unsigned long long ullong;
 
 
-void setTimes(const char *dst, struct stat *st);
 void setAttributes(const char *src, const char *dst, struct stat *st);
+void setTimesFlags(const char *dst, struct stat *st);
+
 
 #pragma mark ••• Copying extended Meta Data - EAs & ACLs •••
 
