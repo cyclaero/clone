@@ -2,8 +2,7 @@
 //  clone
 //
 //  Created by Dr. Rolf Jansen on 2013-01-13.
-//  Copyright (c) 2013 Cyclaero Ltda.
-//  All rights reserved.
+//  Copyright (c) 2013. All rights reserved.
 //
 //  Redistribution and use in source and binary forms, with or without modification,
 //  are permitted provided that the following conditions are met:
@@ -37,10 +36,10 @@
 #define STRINGIFY(cvar) ENQUOTING(cvar)
 
 
-typedef unsigned char  uchar;
-typedef unsigned short ushort;
-typedef unsigned int   uint;
-typedef unsigned long  ulong;
+typedef unsigned char      uchar;
+typedef unsigned short     ushort;
+typedef unsigned int       uint;
+typedef unsigned long      ulong;
 
 typedef long long          llong;
 typedef unsigned long long ullong;

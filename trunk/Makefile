@@ -1,8 +1,7 @@
 # Makefile for clone(1)
 #
 # Created by Dr. Rolf Jansen on 2013-01-13.
-# Copyright (c) 2013 Cyclaero Ltda.
-# All rights reserved.
+# Copyright (c) 2013. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
