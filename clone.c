@@ -646,6 +646,7 @@ int fileEmpty(char *src, char *dst, struct stat *st)
       setAttributes(src, dst, st);
       rc = NO_ERROR;
    }
+
    else
       rc = DST_ERROR;
 
@@ -751,9 +752,6 @@ int deleteDirEntity(char *path, size_t pl, long st_mode)
          }
          break;
 
-      default:
-         ftype = "of unknown type";
-         goto special;
       case S_IFIFO:      // A named pipe or FIFO.
          ftype = "a named pipe or FIFO";
          goto special;
@@ -768,6 +766,9 @@ int deleteDirEntity(char *path, size_t pl, long st_mode)
          goto special;
       case S_IFWHT:      // A whiteout file. (somehow deleted, but not eventually yet)
          ftype = "a unsupported whiteout file";
+         goto special;
+      default:
+         ftype = "of unknown type";
       special:
          printf("\n%s is %s, it could not be deleted.\n", path, ftype);
          break;
@@ -786,8 +787,8 @@ int deleteDirectory(char *path, size_t pl)
    if (dp = opendir(path))
    {
       while (readdir_r(dp, &bep, &ep) == 0 && ep)
-         if (ep->d_name[0] != '.' || (ep->d_name[1] != '\0' &&
-            (ep->d_name[1] != '.' ||  ep->d_name[2] != '\0')))
+         if ( ep->d_name[0] != '.' || (ep->d_name[1] != '\0' &&
+             (ep->d_name[1] != '.' ||  ep->d_name[2] != '\0')))
          {
             // next path
             size_t npl   = pl + ep->d_namlen;
@@ -851,13 +852,13 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                   storeFSName(syncEntities, dep->d_name, dep->d_namlen, NULL);
                   break;
 
-               default:
                case DT_UNKNOWN:  //  0 - The type is unknown.
                case DT_FIFO:     //  1 - A named pipe or FIFO.
                case DT_CHR:      //  2 - A character device.
                case DT_BLK:      //  6 - A block device.
                case DT_SOCK:     // 12 - A local-domain socket.
                case DT_WHT:      // 14 - A whiteout file. (somehow deleted, but not eventually yet)
+               default:
                   // do nothing
                   break;
             }
@@ -957,12 +958,12 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                         clone(nsrc, nsl, ndst, ndl);
                         setAttributes(nsrc, ndst, &sstat);
                      }
+
                      else
                      {
-                        chown(ndst, sstat.st_uid, sstat.st_gid);
-                        chmod(ndst, sstat.st_mode & ALLPERMS);
-                        setTimes(ndst, &sstat);
-                        chflags(ndst, sstat.st_flags);
+                        lchown(ndst, sstat.st_uid, sstat.st_gid);
+                        lchmod(ndst, sstat.st_mode & ALLPERMS);
+                        setTimesFlags(ndst, &sstat);
                      }
 
                      if (dirCreated)
@@ -1014,9 +1015,6 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                   }
                   break;
 
-               default:
-                  ftype = "of unknown type";
-                  goto special;
                case S_IFIFO:      // A named pipe or FIFO.
                   ftype = "a named pipe or FIFO";
                   goto special;
@@ -1031,6 +1029,9 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                   goto special;
                case S_IFWHT:      // A whiteout file. (somehow deleted, but not eventually yet)
                   ftype = "a unsupported whiteout file";
+                  goto special;
+               default:
+                  ftype = "of unknown type";
                special:
                   printf("\n%s is %s, and it is not copied.\n", nsrc, ftype);
                   free(nsrc);

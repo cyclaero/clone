@@ -41,48 +41,36 @@
 
 #pragma mark ••• Passing all Attribute •••
 
-void setTimes(const char *dst, struct stat *st)
+void setAttributes(const char *src, const char *dst, struct stat *st)
 {
-// from man 2 utimes (FreeBSD 9.1)
-/*
-     If times is non-NULL, it is assumed to point to an array of two timeval
-     structures.  The access time is set to the value of the first element,
-     and the modification time is set to the value of the second element.  For
-     file systems that support file birth (creation) times (such as UFS2), the
-     birth time will be set to the value of the second element if the second
-     element is older than the currently set birth time.  To set both a birth
-     time and a modification time, two calls are required; the first to set
-     the birth time and the second to set the (presumably newer) modification
-     time.  Ideally a new system call will be added that allows the setting of
-     all three times at once.  The caller must be the owner of the file or be
-     the super-user.
-*/
-   struct timeval tv[2];
-   tv[0].tv_sec = st->st_atimespec.tv_sec, tv[0].tv_usec = (int)(st->st_atimespec.tv_nsec/1000);
-   tv[1].tv_sec = st->st_birthtimespec.tv_sec, tv[1].tv_usec = (int)(st->st_birthtimespec.tv_nsec/1000);
-   lutimes(dst, tv);
-   tv[1].tv_sec = st->st_mtimespec.tv_sec, tv[1].tv_usec = (int)(st->st_mtimespec.tv_nsec/1000);
-   lutimes(dst, tv);
+   ExtMetaData xmd;
+   getMetaData(src, &xmd);
+   setMetaData(dst, &xmd);
+
+   lchown(dst, st->st_uid, st->st_gid);
+   lchmod(dst, st->st_mode & ALLPERMS);
+   setTimesFlags(dst, st);
 }
 
-#pragma mark ••• Copying Extended Meta Data - EXAs & ACLs •••
+
+#pragma mark ••• Setting Times/Flags and Copying Extended Meta Data - EXAs & ACLs •••
 
 #if defined (__APPLE__)
 
-   void setAttributes(const char *src, const char *dst, struct stat *st)
-   {
-      ExtMetaData xmd;
+   #include <sys/xattr.h>
 
-      lchown(dst, st->st_uid, st->st_gid);
-      lchmod(dst, st->st_mode & ALLPERMS);
+   void setTimesFlags(const char *dst, struct stat *st)
+   {
+      // On Mac OS X, set the flags before the times
       lchflags(dst, st->st_flags);
 
-      getMetaData(src, &xmd);
-      setMetaData(dst, &xmd);
-      setTimes(dst, st);
+      struct timeval tv[2];
+      tv[0].tv_sec = st->st_atimespec.tv_sec, tv[0].tv_usec = (int)(st->st_atimespec.tv_nsec/1000);
+      tv[1].tv_sec = st->st_birthtimespec.tv_sec, tv[1].tv_usec = (int)(st->st_birthtimespec.tv_nsec/1000);
+      lutimes(dst, tv);
+      tv[1].tv_sec = st->st_mtimespec.tv_sec, tv[1].tv_usec = (int)(st->st_mtimespec.tv_nsec/1000);
+      lutimes(dst, tv);
    }
-
-   #include <sys/xattr.h>
 
    void getMetaData(const char *src, ExtMetaData *xmd)
    {
@@ -176,21 +164,33 @@ void setTimes(const char *dst, struct stat *st)
 
 #elif defined (__FreeBSD__)
 
-   void setAttributes(const char *src, const char *dst, struct stat *st)
+   #include <sys/extattr.h>
+
+   void setTimesFlags(const char *dst, struct stat *st)
    {
-      ExtMetaData xmd;
+      // from man 2 utimes (FreeBSD 9.1):
+      /* If times is non-NULL, it is assumed to point to an array of two timeval
+         structures.  The access time is set to the value of the first element,
+         and the modification time is set to the value of the second element.  For
+         file systems that support file birth (creation) times (such as UFS2), the
+         birth time will be set to the value of the second element if the second
+         element is older than the currently set birth time.  To set both a birth
+         time and a modification time, two calls are required; the first to set
+         the birth time and the second to set the (presumably newer) modification
+         time.  Ideally a new system call will be added that allows the setting of
+         all three times at once.  The caller must be the owner of the file or be
+         the super-user. */
 
-      lchown(dst, st->st_uid, st->st_gid);
-      lchmod(dst, st->st_mode & ALLPERMS);
+      struct timeval tv[2];
+      tv[0].tv_sec = st->st_atimespec.tv_sec, tv[0].tv_usec = (int)(st->st_atimespec.tv_nsec/1000);
+      tv[1].tv_sec = st->st_birthtimespec.tv_sec, tv[1].tv_usec = (int)(st->st_birthtimespec.tv_nsec/1000);
+      lutimes(dst, tv);
+      tv[1].tv_sec = st->st_mtimespec.tv_sec, tv[1].tv_usec = (int)(st->st_mtimespec.tv_nsec/1000);
+      lutimes(dst, tv);
 
-      getMetaData(src, &xmd);
-      setMetaData(dst, &xmd);
-      setTimes(dst, st);
-
+      // On FreeBSD, set the flags after the times
       lchflags(dst, st->st_flags);
    }
-
-   #include <sys/extattr.h>
 
    void getMetaData(const char *src, ExtMetaData *xmd)
    {
