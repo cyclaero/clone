@@ -25,7 +25,7 @@
 
 .if exists(.svn)
 .ifmake update
-REVNUM != svn update | tail -1 | cut -d " " -f3 | cut -d "." -f1
+REVNUM != svn update > /dev/null; svnversion
 .else
 REVNUM != svnversion
 .endif
