@@ -737,7 +737,7 @@ void releaseTable(Node *table[])
 //      and the respective source file/link name
 //
 //   2. store and retrieve file system names that
-//      exsit in the destination hierarchy.
+//      exist in the destination hierarchy.
 //
 // Inodes of the files/links are sufficiently random for direct
 // use, without passing them through a hash function, e.g.:
@@ -762,7 +762,7 @@ Node *findINode(Node *table[], ulong inode)
 Node *storeINode(Node *table[], ulong inode, const char *fsname, size_t namlen, long dev)
 {
    uint  n = *(uint *)table;
-   Value value; value.kind = Simple, value.v.i = dev;
+   Value value = {Simple, {.i = dev}};
    Node *passed;
    addTreeNode(inode, fsname, namlen, &value, &table[inode%n + 1], &passed);
    return passed;
