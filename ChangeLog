@@ -6,7 +6,13 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced by "••••"
 
 
-2013-02-19 06:18  rj - r32
+2013-02-19 12:35  rj - r33
+
+   * ChangeLog:
+     - entry r32: corrected timestamp 06:18 to 12:18
+     - entry r28: rights and obligations has been transferred from Cyclaero Ltda. to Dr. Rolf Jansen.
+
+2013-02-19 12:18  rj - r32
 
    * ChangeLog, clone.c:
      - added ChangeLog
@@ -34,8 +40,8 @@ Note: Milestones are embraced by "••••"
 2013-02-17 12:40  rj - r28
 
 	* Makefile, clone.1, clone.c, utils.c, utils.h:
-     - Herewith, transferred all rights on the clone project, including copyright,
-       from the Legal Entity Cyclaero Ltda. to the Natural Person Dr. Rolf Jansen.
+     - Herewith, transferred all rights  and obligations on the clone project, including
+       copyright, from the Legal Entity Cyclaero Ltda. to the Natural Person Dr. Rolf Jansen.
 
 2013-02-15 00:45  rj - r27
 
