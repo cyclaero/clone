@@ -1,0 +1,361 @@
+This is the ChangeLog of the clone project
+
+Created by Dr. Rolf Jansen on 2013-02-19.
+Copyright (c) 2013. All rights reserved.
+
+Note: Milestones are embraced by "••••"
+
+
+2013-02-19 06:18  rj - r32
+
+   * ChangeLog, clone.c:
+     - added ChangeLog
+     - set version to 1.0.1b
+
+2013-02-18 18:54  rj - r31
+
+	* Makefile, clone.xcodeproj/project.pbxproj:
+	  - switched back to the former method of obtaining the svn revision on update.
+
+2013-02-18 18:28  rj - r30
+
+	* clone.xcodeproj/project.pbxproj, utils.c:
+     - minor polishing
+
+2013-02-17 23:08  rj - r29
+
+	* clone.c, utils.c, utils.h:
+     - move setAttributes() out of the conditional compiling section, i.e. making it common.
+     - instead, rename setTimes() to setTimesFlags() and move it into the conditional compiling section.
+	  - On Mac OS X, the flags need to be set before the times, and on FreeBSD the flags
+       need to be set after the times -- in this respect, nothing has changed for FreeBSD.
+	  - some minor code formatting.
+
+2013-02-17 12:40  rj - r28
+
+	* Makefile, clone.1, clone.c, utils.c, utils.h:
+     - Herewith, transferred all rights on the clone project, including copyright,
+       from the Legal Entity Cyclaero Ltda. to the Natural Person Dr. Rolf Jansen.
+
+2013-02-15 00:45  rj - r27
+
+	* clone.c, utils.c:
+     - on Mac OS X, setTimes() must be the last call in setAttributes.
+	  - on FreeBSD, lchflags() must be the last call (so it was before).
+
+2013-02-15 00:30  rj - r26
+
+	* clone.c, utils.c:
+     - on Mac OS X, the d_type field of struct dirent does not reliable indicate
+       the type for external file systems (e.g. NFS shares, UDF volumes, ??),
+       therefore, need to switch most of the calls to stat() to lstat(),
+	    and extract the file type from the st_mode field of struct stat.
+	  - setTimes() shall be the final call in setAttributes, or in some cases
+       the modifications time become not set.
+
+
+•••• 2013-02-08 -- Created a snapshot of r25 for release as v1.0.0, provided it for download at GC, and submitted it to FreeBSD ports ••••
+
+
+2013-02-11 15:05  rj - r25
+
+	* clone.1, clone.xcodeproj/project.pbxproj:
+     - changed line-ending of man file from CRLF to LF
+	  - in the Xcode project enabled syntax coloring for the man file
+	  - removed the directory "related stuff" from the Xcode project
+
+2013-02-09 15:35  rj - r24
+
+	* Makefile, clone.c:
+     - switch to regular version numbering system
+     - keep svn revision as a sort of fingerprint
+
+2013-02-08 17:26  rj - r23
+
+	* clone.c:
+     - do not report meaningless numbers, if nothing has been copied
+
+2013-02-08 17:18  rj - r22
+
+	* clone.c:
+     - when incrementing to or synchronizing directories, do not require them to be of same st_size
+
+2013-02-08 15:50  rj - r21
+
+	* clone.1, clone.c:
+     - corrected spelling in man file
+	  - fixed a crashing bug in synchronization mode
+	  - don't require modification dates of directories being the same for synchronization or incremental update
+
+2013-02-08 12:20  rj - r20
+
+	* clone.1:
+     - minor lingual clarification in the descriptive text (transferring -> copying)
+
+2013-02-08 12:06  rj - r19
+
+	* Makefile:
+     - soft-define the desired compiler
+
+
+•••• 2013-02-08 -- Created a snapshot of r18, provided it for download at GC, and submitted it to FreeBSD ports ••••
+
+
+2013-02-07 23:45  rj - r18
+
+	* clone.1, clone.c:
+     - improved man file
+	  - destination must no be a child of source, check this and in case drop an error message and stop
+
+2013-02-07 00:54  rj - r17
+
+	* Makefile:
+     - gcc does not know -Wno-empty-body (see r11)
+
+2013-02-07 00:50  rj - r16
+
+	* clone.c, clone.xcodeproj/project.pbxproj, utils.c, utils.h:
+     - FreeBSD gcc 4.2 does not understand anonymous unions
+	  - silence an empty body warning, when compiled with clang
+
+2013-02-07 00:37  rj - r15
+
+	* Makefile:
+     - improved Makefile
+
+2013-02-07 00:36  rj - r14
+
+	* clone.c:
+     - fixed a bug when checking whether to create a new destination directory or not
+
+2013-02-06 22:50  rj - r13
+
+	* clone.1, clone.c, utils.c, utils.h:
+     - implemented synchronize and incremental mode
+	  - improved setting of stat st_*timespec
+
+2013-02-04 03:46  rj - r12
+
+	* clone.c:
+     - fixed a crashing bug
+
+2013-02-04 03:07  rj - r11
+
+	* Makefile, clone.1, clone.c:
+     - completed man file
+	  - improved usage()
+	  - added -Wno-empty-body in Makefile
+
+2013-02-04 02:26  rj - r10
+
+	* clone.c:
+     - implemented recursive dirDelete() and the -d option
+
+2013-02-04 00:44  rj - r9
+
+	* clone.c:
+     - recognize tilde path for -X excl-list-file
+
+2013-02-03 23:44  rj - r8
+
+	* clone.1, clone.c, clone.xcodeproj/project.pbxproj, utils.c:
+     - added option handler
+	  - implemented cache toggling options
+	  - implemented exclude list options
+	  - improved usage() function
+	  - improved man file
+
+2013-02-03 17:24  rj - r7
+
+	* clone.c, utils.h:
+     - don't get locked on error when opening file for reading
+	  - improved error reporting
+
+2013-02-03 15:38  rj - r6
+
+	* clone.c, utils.c, utils.h:
+     - added a second name-value store (hash table)
+	  - adaptations to the common parts of the key/name-value store
+     - formatting
+
+2013-02-02 23:44  rj - r5
+
+	* Makefile, clone.1, clone.c, clone.xcodeproj/project.pbxproj, svnrev.xcconfig:
+     - added man file clone(1)
+	  - corrected short description from "file system cloning" to "file tree cloning"
+
+2013-02-02 20:39  rj - r4
+
+	* clone.c:
+     - the clone tool returns 1 if it could not start the cloning process otherwise it returns 0
+	  - added 2 comments and formatting
+
+2013-02-02 16:53  rj - r3
+
+	* .:
+     - added OS X build directories to be svn ignored
+
+2013-02-02 02:33  rj - r2
+
+	* ., Makefile, clone.c, clone.xcodeproj, clone.xcodeproj/project.pbxproj, svnrev.xcconfig, utils.c, mutils.h:
+     - Initial import
+
+2013-02-02 01:54  rj - r1
+
+	* .:
+     - Initial directory structure, i.e. created repository on Google Code.
+
+
+•••• 2013-02-02 -- forking the entire clone project to http://code.google.com/p/clone/ ••••
+
+
+2013-02-02 02:24 (BRST)  rolf - r26 (local)
+
+	* .:
+     - corrected svn ignore entry for *.xcconfig
+
+2013-02-02 02:20 (BRST)  rolf - r25 (local)
+
+	* Makefile, clone.c, utils.c, utils.h:
+     - Added the BSD 2 clause license
+	  - explicit typing of long to int
+     - commented out template for read/write cache deactivation -- high performance penalty!!!
+
+2013-01-28 01:43 (BRST)  rolf - r24 (local)
+
+	* Makefile:
+     - added install target to Makefile
+
+2013-01-27 22:43 (BRST)  rolf - r23 (local)
+
+	* utils.c:
+     - formatting
+
+2013-01-27 15:40 (BRST)  rolf - r22 (local)
+
+	* clone.c:
+     - use full path instead of the file name in the various "... not copied" notifications
+
+2013-01-27 14:33 (BRST)  rolf - r21 (local)
+
+	* utils.c:
+     - need to typecast uchar* <-> char* conversions
+
+2013-01-27 14:29 (BRST)  rolf - r20 (local)
+
+	* Makefile, utils.c:
+     - define C99 as the standard in the Makefile
+     - provide even more space to extattr_list_link(),
+       because it is writing beyond the buffer (see r18 (local)
+
+2013-01-26 21:42 (BRST)  rolf - r19 (local)
+
+	* utils.c:
+     - length bytes are unsigned char
+
+2013-01-26 18:37 (BRST)  rolf - r18 (local)
+
+	* utils.c:
+     - for FreeBSD allocate a twice as big memory buffer for fetching the attribute name list,
+       since something seems to write beyond the supplied memory buffer
+
+2013-01-26 14:07 (BRST)  rolf - r17 (local)
+
+	* utils.c:
+     - use malloc() instead of calloc() in getMetaData()
+
+2013-01-26 02:31 (BRST)  rolf - r16 (local)
+
+	* clone.c:
+     - when creating a hard link, the flags need to be removed
+	    temporarily, since some flags don't allow linking
+
+2013-01-26 01:52 (BRST)  rolf - r15 (local)
+
+	* clone.c:
+     - instead of doing nothing create the directory (mount point) of source trees
+       on a different device, without touching the extended attributes
+
+2013-01-26 01:27 (BRST)  rolf - r14 (local)
+
+	* clone.c:
+     - revert r13 to r12 because creating mount points at the cloning level did not work
+
+2013-01-26 01:18 (BRST)  rolf - r13 (local)
+
+	* clone.c:
+     - instead of doing nothing create the directory (mount point) of source trees on a different device
+
+2013-01-26 00:37 (BRST)  rolf - r12 (local)
+
+	* clone.c, utils.c:
+     - change the flags last
+
+2013-01-26 00:20 (BRST)  root - r11 (local)
+
+	* .:
+     - added .depend file to be svn ignored
+
+2013-01-26 00:18 (BRST)  rolf - r10 (local)
+
+	* clone.c, utils.c, utils.h:
+     - new utility function setAttributes() replaces
+       all the individual attribute setting sequences
+
+2013-01-25 23:05 (BRST)  rolf - r9  (local)
+
+	* clone.c:
+     - remove the shared lock option on opening files for reading,
+       this will block the program on files with exclusive lock.
+	  - spelling - coipied to copied
+
+2013-01-25 21:43 (BRST)  rolf - r8  (local)
+
+	* clone.c:
+     - improved notice for special file types
+
+2013-01-25 17:58 (BRST)  rolf - r7  (local)
+
+	* Makefile:
+     - added libpthread to the LDFLAGS
+
+2013-01-25 17:48 (BRST)  rolf - r6  (local)
+
+	* clone.c, utils.h:
+     - reset those chunks and qitems that are to be recycled, and not those in the next slot
+	  - don't need stage "finished", use virgin instead
+	  - prepend error messages with a LF
+	  - in any case (also on error) set gWriterLast
+	  - the writer thread take a local copy of its current qitem, in order to allow
+     - early recycling of the global qitem
+     - corrected paths for meta data copying of directories (paths indicated the parent dir),
+       also copy the meta data after cloning the directory
+	  - do not truncate the time stamps of the files to int
+
+2013-01-25 15:01 (BRST)  rolf - r5  (local)
+
+	* clone.c:
+     - improved the dispenser concept - an exactly sequential memory pool
+	  - get also the queue items from a dispenser instead of from malloc()
+	  - no need to wait at a level if no files were scheduled for copying
+
+2013-01-22 14:45 (BRST)  rolf - r4  (local)
+
+	* clone.c:
+     - switched to Low Level I/O
+	  - use a chunk pool for data copying instead of mallocing each chunk
+
+2013-01-21 14:29 (BRST)  rolf - r3  (local)
+
+	* ., clone.xcodeproj/project.pbxproj:
+     - added directory related stuff
+
+2013-01-21 14:18 (BRST)  rolf - r2  (local)
+
+	* ., clone.xcodeproj:
+     - added svn ignore property
+
+2013-01-21 14:05 (BRST)  root - r1  (local)
+
+	* ., Makefile, clone.c, clone.xcodeproj, clone.xcodeproj/project.pbxproj, utils.c, utils.h:
+     - Initial Import

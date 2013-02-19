@@ -43,7 +43,7 @@
 #include "utils.h"
 
 
-static const char *version = "Version 1.0.1 (r"STRINGIFY(SVNREV)")";
+static const char *version = "Version 1.0.1b (r"STRINGIFY(SVNREV)")";
 
 dev_t  gSourceDev;
 

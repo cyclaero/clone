@@ -31,6 +31,7 @@
 		7E67492716BDC167009036B2 /* clone.1 */ = {isa = PBXFileReference; explicitFileType = text.man; lineEnding = 0; path = clone.1; sourceTree = "<group>"; };
 		7ED7608C16AD6325000A566D /* svnrev.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = svnrev.xcconfig; sourceTree = "<group>"; };
 		7ED760A316AD6A02000A566D /* Makefile */ = {isa = PBXFileReference; explicitFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
+		7EDC0F1216D3885F00B6DB4A /* ChangeLog */ = {isa = PBXFileReference; lastKnownFileType = text; path = ChangeLog; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -53,6 +54,7 @@
 				7E67492716BDC167009036B2 /* clone.1 */,
 				7ED760A316AD6A02000A566D /* Makefile */,
 				7ED7608C16AD6325000A566D /* svnrev.xcconfig */,
+				7EDC0F1216D3885F00B6DB4A /* ChangeLog */,
 				7E48627016A345CA008E0F01 /* Products */,
 			);
 			sourceTree = "<group>";
