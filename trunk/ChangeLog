@@ -6,7 +6,15 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced by ••••
 
 
-2013-02-20 21:54  rj - r36
+•••• 2013-02-20 -- Created a snapshot of r37 for release as v1.0.1, provided it for download at GC, and submitted it to FreeBSD ports ••••
+
+
+2013-02-20 23:29  rj - r37
+
+   * ChangeLog:
+     - release of version 1.0.1 (r37)
+
+2013-02-20 21:55  rj - r36
 
    * clone.c:
      - when reading, do not assume anything about the file size
