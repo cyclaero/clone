@@ -176,7 +176,7 @@ void recycleFinishedChunk(CopyChunk *chunk)
 
          else if (gHighChunkSN != maxChunkCount)
             gHighChunkSN = gBaseChunkSN;
-         
+
          if (gChunkWait && gNextChunkSN < gHighChunkSN)
             pthread_cond_signal(&chunk_cond);
       }
@@ -222,7 +222,7 @@ QItem *dispenseNewQItem(void)
    }
 
    qitem = &gQItemDispenser[gNextQItemSN];
-   qitem->stage = nascent;
+   qitem->stage = virgin;
    qitem->chunk = NULL;
 
    if (++gNextQItemSN >= maxQItemCount)
@@ -317,66 +317,40 @@ void *reader(void *threadArg)
       {
          if (gReadNoCache) fnocache(in);
 
-         size_t size;
-         size_t filesize = qitem->st.st_size;
-         size_t blcksize = chunkBlckSize;
-         size_t headsize = (filesize%blcksize) ?: blcksize;
-         uint   i, n = (uint)((filesize-headsize)/blcksize);
+         bool       first = true;
+         int        state;
+         size_t     size;
+         CopyChunk *chunk;
 
-         CopyChunk *chunk = dispenseEmptyChunk();
-         if ((size = read(in, chunk->buffer, headsize)) != -1)
-         {
-            chunk->state = (n == 0 || size == 0) ? final : ready;
-            chunk->rc    = NO_ERROR;
-            chunk->size  = size;
-         }
-
-         else
-         {
-            // Nothing good can be done here. Only drop a,
-            // message, and set the chunk size to 0, so
-            // the writer can resolve the issue.
-            chunk->state = final;
-            chunk->rc    = SRC_ERROR;
-            chunk->size  = 0;
-            strerror_r(abs(chunk->rc), errorString, errStrLen);
-            printf("\nRead error on file %s: %s.\n", qitem->src, errorString);
-         }
-
-         pthread_mutex_lock(&writer_mutex);
-         qitem->chunk = chunk;
-         if (gWriterWait)
-            pthread_cond_signal(&writer_cond);
-         pthread_mutex_unlock(&writer_mutex);
-
-         // the continuation chunks if any
-         for (i = 1; i <= n && chunk->rc == NO_ERROR; i++)
+         do
          {
             chunk = dispenseEmptyChunk();
-            if ((size = read(in, chunk->buffer, blcksize)) != -1)
+            if ((size = read(in, chunk->buffer, chunkBlckSize)) != -1)
             {
-               chunk->state = (i == n || size == 0) ? final : ready;
                chunk->rc    = NO_ERROR;
                chunk->size  = size;
+               chunk->state = state = (size < chunkBlckSize) ? final : ready;
             }
 
             else
             {
-               // Again, the writer needs to resolve the issue.
-               // Perhaps it is already waiting for the next chunk,
-               // and therefore the processe may not be stopped here.
-               chunk->state = final;
+               // Nothing good can be done here. Only drop a, message, and set the chunk size to 0.
+               // The writer has to resolve the issue. Perhaps it is already waiting for the next chunk,
+               // and therefore, the processe may not be stopped here.
                chunk->rc    = SRC_ERROR;
                chunk->size  = 0;
+               chunk->state = state = final;
                strerror_r(abs(chunk->rc), errorString, errStrLen);
                printf("\nRead error on file %s: %s.\n", qitem->src, errorString);
             }
 
             pthread_mutex_lock(&writer_mutex);
+            if (first)
+               first = false, qitem->chunk = chunk;
             if (gWriterWait)
                pthread_cond_signal(&writer_cond);
             pthread_mutex_unlock(&writer_mutex);
-         }
+         } while (state != final);
 
          close(in);
       }
@@ -564,45 +538,28 @@ void *writer(void *threadArg)
 
 int atomCopy(char *src, char *dst, struct stat *st)
 {
-   int    in, out, rc = NO_ERROR;
-   size_t filesize = st->st_size;
-
+   int in, out;
    if ((in = open(src, O_RDONLY)) != -1)
       if ((out = open(dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, st->st_mode & ALLPERMS)) != -1)
       {
          if (gReadNoCache)  fnocache(in);
          if (gWriteNoCache) fnocache(out);
 
-         if (filesize)
+         int    rc = NO_ERROR;
+         size_t size, filesize = 0;
+         char  *buffer = malloc(chunkBlckSize);
+
+         do
          {
-            size_t size;
-            size_t blcksize = chunkBlckSize;
-            size_t tailsize = filesize%blcksize;
-            uint i, n = (uint)(filesize/blcksize);
-            char *buffer = malloc(blcksize);
+            if ((size = read(in, buffer, chunkBlckSize)) == -1)
+               rc = SRC_ERROR;
+            else if (size != 0 && write(out, buffer, size) == -1)
+               rc = DST_ERROR;
+            else
+               filesize += size;
+         } while (rc == NO_ERROR && size == chunkBlckSize);
 
-            for (filesize = 0, i = 0; i < n && rc == NO_ERROR; i++)
-            {
-               if ((size = read(in, buffer, blcksize)) == -1)
-                  rc = SRC_ERROR;
-               else if (size != 0 && write(out, buffer, size) == -1)
-                  rc = DST_ERROR;
-               else
-                  filesize += size;
-            }
-
-            if (tailsize && size != 0 && rc == NO_ERROR)
-            {
-               if ((size = read(in, buffer, tailsize)) == -1)
-                  rc = SRC_ERROR;
-               else if (size != 0 && write(out, buffer, tailsize) == -1)
-                  rc = DST_ERROR;
-               else
-                  filesize += size;
-            }
-
-            free(buffer);
-         }
+         free(buffer);
 
          close(out);
          close(in);
@@ -619,8 +576,8 @@ int atomCopy(char *src, char *dst, struct stat *st)
 
       else  // !out
       {
-        close(in);
-        return DST_ERROR;
+         close(in);
+         return DST_ERROR;
       }
 
    else     // !in
@@ -677,14 +634,16 @@ int fileEmpty(char *src, char *dst, struct stat *st)
 }
 
 
-void fileCopy(llong fid, char *src, char *dst, struct stat *st)
+void fileCopyScheduler(llong fid, char *src, char *dst, struct stat *st)
 {
    QItem *qitem = dispenseNewQItem();
+
    pthread_mutex_lock(&reader_mutex);
-   qitem->fid = fid;
-   qitem->src = src;
-   qitem->dst = dst;
-   qitem->st  = *st;
+   qitem->stage = nascent;
+   qitem->fid   = fid;
+   qitem->src   = src;
+   qitem->dst   = dst;
+   qitem->st    = *st;
    if (gReaderWait)
       pthread_cond_signal(&reader_cond);
    pthread_mutex_unlock(&reader_mutex);
@@ -738,6 +697,32 @@ cleanup:
    return rc;
 }
 
+
+int dtType2stFmt(int d_type)
+{
+   switch (d_type)
+   {
+      default:
+      case DT_UNKNOWN:  //  0 - The type is unknown.
+         return 0;
+      case DT_FIFO:     //  1 - A named pipe or FIFO.
+         return DT_FIFO;
+      case DT_CHR:      //  2 - A character device.
+         return DT_CHR;
+      case DT_DIR:      //  4 - A directory.
+         return S_IFDIR;
+      case DT_BLK:      //  6 - A block device.
+         return S_IFBLK;
+      case DT_REG:      //  8 - A regular file.
+         return S_IFREG;
+      case DT_LNK:      // 10 - A symbolic link.
+         return S_IFLNK;
+      case DT_SOCK:     // 12 - A local-domain socket.
+         return S_IFSOCK;
+      case DT_WHT:      // 14 - A whiteout file. (somehow deleted, but not eventually yet)
+         return S_IFWHT;
+   }
+}
 
 int deleteDirectory(char *path, size_t pl);
 
@@ -807,6 +792,7 @@ int deleteDirectory(char *path, size_t pl)
 
    if (dp = opendir(path))
    {
+      struct stat st;
       while (readdir_r(dp, &bep, &ep) == 0 && ep)
          if ( ep->d_name[0] != '.' || (ep->d_name[1] != '\0' &&
              (ep->d_name[1] != '.' ||  ep->d_name[2] != '\0')))
@@ -814,7 +800,14 @@ int deleteDirectory(char *path, size_t pl)
             // next path
             size_t npl   = pl + ep->d_namlen;
             char  *npath = strcpy(malloc(npl+2), path); strcpy(npath+pl, ep->d_name);
-            rc = deleteDirEntity(npath, npl, ep->d_type);
+
+            if (ep->d_type != DT_UNKNOWN)
+               rc = deleteDirEntity(npath, npl, dtType2stFmt(ep->d_type));
+            else if (lstat(npath, &st) != -1)
+               rc = deleteDirEntity(npath, npl, st.st_mode);
+            else
+               rc = DST_ERROR;
+
             free(npath);
          }
 
@@ -850,38 +843,29 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
    static char   errorString[errStrLen];
    static llong  fileID = 0;
 
-   DIR           *sdp,  *ddp;
-   struct dirent *sep,  *dep, bep;
+   DIR           *sdp, *ddp;
+   struct dirent *sep, *dep, bep;
 
-   // In incremental or sysnchronize mode, store
-   // the inventory of the destination directory
-   // id the key-name/value store.
+   // In incremental or sysnchronize mode, store the inventory of
+   // the destination directory into the key-name/value store.
    Node *syncNode, **syncEntities = NULL;
-   if ((gIncremental || gSynchronize) &&
-       (ddp = opendir(dst)))
+   if ((gIncremental || gSynchronize) && (ddp = opendir(dst)))
    {
+      struct stat st;
       syncEntities = createTable(1024);
       while (readdir_r(ddp, &bep, &dep) == NO_ERROR && dep)
          if ( dep->d_name[0] != '.' || (dep->d_name[1] != '\0' &&
              (dep->d_name[1] != '.' ||  dep->d_name[2] != '\0')))
          {
-            switch (dep->d_type)
-            {
-               case DT_DIR:      //  4 - A directory.
-               case DT_REG:      //  8 - A regular file.
-               case DT_LNK:      // 10 - A symbolic link.
-                  storeFSName(syncEntities, dep->d_name, dep->d_namlen, NULL);
-                  break;
+            if (dep->d_type == DT_DIR || dep->d_type == DT_REG || dep->d_type == DT_LNK)
+               storeFSName(syncEntities, dep->d_name, dep->d_namlen, NULL);
 
-               case DT_UNKNOWN:  //  0 - The type is unknown.
-               case DT_FIFO:     //  1 - A named pipe or FIFO.
-               case DT_CHR:      //  2 - A character device.
-               case DT_BLK:      //  6 - A block device.
-               case DT_SOCK:     // 12 - A local-domain socket.
-               case DT_WHT:      // 14 - A whiteout file. (somehow deleted, but not eventually yet)
-               default:
-                  // do nothing
-                  break;
+            else if (dep->d_type == DT_UNKNOWN)    // need to call lstat()
+            {
+               char path[dl+dep->d_namlen+1]; strcpy(path, dst); strcpy(path+dl, dep->d_name);
+               if (lstat(path, &st) != -1 &&
+                   ((st.st_mode &= S_IFMT) == S_IFDIR || st.st_mode == S_IFREG || st.st_mode == S_IFLNK))
+                  storeFSName(syncEntities, dep->d_name, dep->d_namlen, NULL);
             }
          }
 
@@ -1008,7 +992,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                      {
                         fCount++;
                         lastID = ++fileID;
-                        fileCopy(fileID, nsrc, ndst, &sstat);
+                        fileCopyScheduler(fileID, nsrc, ndst, &sstat);
                      }
 
                      else
@@ -1323,7 +1307,7 @@ int main(int argc, char *const argv[])
    if (dst[dl-1] != '/')
       *(short *)&dst[dl++] = *(short *)"/";
 
-   // 2. check whether the paths do exist, lead to directories, and make sure that destination is not inherited by source 
+   // 2. check whether the paths do exist, lead to directories, and make sure that destination is not inherited by source
    bool   dirCreated = false;
    int    rc;
    struct stat sstat, dstat;
