@@ -317,17 +317,18 @@ void *reader(void *threadArg)
       {
          if (gReadNoCache) fnocache(in);
 
+         size_t size;
          size_t filesize = qitem->st.st_size;
          size_t blcksize = chunkBlckSize;
          size_t headsize = (filesize%blcksize) ?: blcksize;
          uint   i, n = (uint)((filesize-headsize)/blcksize);
 
          CopyChunk *chunk = dispenseEmptyChunk();
-         if (read(in, chunk->buffer, headsize) == headsize)
+         if ((size = read(in, chunk->buffer, headsize)) != -1)
          {
-            chunk->state = (n == 0) ? final : ready;
+            chunk->state = (n == 0 || size == 0) ? final : ready;
             chunk->rc    = NO_ERROR;
-            chunk->size  = headsize;
+            chunk->size  = size;
          }
 
          else
@@ -352,11 +353,11 @@ void *reader(void *threadArg)
          for (i = 1; i <= n && chunk->rc == NO_ERROR; i++)
          {
             chunk = dispenseEmptyChunk();
-            if (read(in, chunk->buffer, blcksize) == blcksize)
+            if ((size = read(in, chunk->buffer, blcksize)) != -1)
             {
-               chunk->state = (n == i) ? final : ready;
+               chunk->state = (i == n || size == 0) ? final : ready;
                chunk->rc    = NO_ERROR;
-               chunk->size  = blcksize;
+               chunk->size  = size;
             }
 
             else
@@ -437,8 +438,8 @@ void *writer(void *threadArg)
       {
          if (gWriteNoCache) fnocache(out);
 
-         int state, rc = NO_ERROR;
-
+         int   state, rc = NO_ERROR;
+         size_t filesize = 0;
          do
          {
             state = chunk->state;
@@ -446,8 +447,9 @@ void *writer(void *threadArg)
             if (chunk->rc != NO_ERROR)
                rc = chunk->rc;
 
-            else if (write(out, chunk->buffer, chunk->size) == chunk->size)
+            else if (chunk->size == 0 || write(out, chunk->buffer, chunk->size) != -1)
             {
+               filesize += chunk->size;
                recycleFinishedChunk(chunk);
 
                if (state != final)
@@ -476,7 +478,7 @@ void *writer(void *threadArg)
          if (rc == NO_ERROR)
          {
             gTotalItems++;
-            gTotalSize += qitem.st.st_size;
+            gTotalSize += filesize;
          }
 
          else
@@ -569,22 +571,31 @@ int atomCopy(char *src, char *dst, struct stat *st)
 
          if (filesize)
          {
+            size_t size;
             size_t blcksize = chunkBlckSize;
             size_t tailsize = filesize%blcksize;
             uint i, n = (uint)(filesize/blcksize);
             char *buffer = malloc(blcksize);
 
-            for (i = 0; i < n && rc == NO_ERROR; i++)
-               if (read(in, buffer, blcksize) != blcksize)
+            for (filesize = 0, i = 0; i < n && rc == NO_ERROR; i++)
+            {
+               if ((size = read(in, buffer, blcksize)) == -1)
                   rc = SRC_ERROR;
-               else if (write(out, buffer, blcksize) != blcksize)
+               else if (size != 0 && write(out, buffer, size) == -1)
                   rc = DST_ERROR;
+               else
+                  filesize += size;
+            }
 
-            if (tailsize && rc == NO_ERROR)
-               if (read(in, buffer, tailsize) != tailsize)
+            if (tailsize && size != 0 && rc == NO_ERROR)
+            {
+               if ((size = read(in, buffer, tailsize)) == -1)
                   rc = SRC_ERROR;
-               else if (write(out, buffer, tailsize) != tailsize)
+               else if (size != 0 && write(out, buffer, tailsize) == -1)
                   rc = DST_ERROR;
+               else
+                  filesize += size;
+            }
 
             free(buffer);
          }
