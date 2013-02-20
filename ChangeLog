@@ -6,6 +6,14 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced by ••••
 
 
+2013-02-20 21:54  rj - r36
+
+   * clone.c:
+     - when reading, do not assume anything about the file size
+     - when the field d_type of struct dirent is DT_UNDEFINED, then call lstat() to obtain the type
+     - rename fileCopy() to fileCopyScheduler()
+     - dispense virgin qitems, set stage to nascent in the fileCopyScheduler()
+
 2013-02-20 11:00  rj - r35
 
    * clone.c:
