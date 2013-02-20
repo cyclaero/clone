@@ -43,7 +43,7 @@
 #include "utils.h"
 
 
-static const char *version = "Version 1.0.1b (r"STRINGIFY(SVNREV)")";
+static const char *version = "Version 1.0.1 (r"STRINGIFY(SVNREV)")";
 
 dev_t  gSourceDev;
 
@@ -479,6 +479,10 @@ void *writer(void *threadArg)
          {
             gTotalItems++;
             gTotalSize += filesize;
+
+            if (filesize != qitem.st.st_size &&             // if the filesize changed then most probably
+                lstat(qitem.src, &qitem.st) != NO_ERROR)    // other things changed too, so lstat() again.
+               rc = SRC_ERROR;
          }
 
          else
@@ -602,8 +606,14 @@ int atomCopy(char *src, char *dst, struct stat *st)
 
          close(out);
          close(in);
+
          gTotalItems++;
          gTotalSize += filesize;
+
+         if (rc == NO_ERROR && filesize != st->st_size &&   // if the filesize changed then most probably
+             lstat(src, st) != NO_ERROR)                    // other things changed too, so lstat() again.
+            rc = SRC_ERROR;
+
          return rc;
       }
 
