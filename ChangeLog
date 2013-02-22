@@ -6,6 +6,16 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced by ••••
 
 
+2013-02-22 11:10  rj - r38
+
+   * clone.c:
+     - qitems are kept initialized in the dispenser, so, no need to initialize them again in dispenseNewQItem()
+     - removed unecessary helper variables and constructs from writer()
+     - in writer() clean-up everything at one central stage below the cleanfinish label
+     - release src and dst paths in reverse order as they were allocated, i.e. free() dst first
+     - set version to 1.0.2b
+
+
 •••• 2013-02-20 -- Created a snapshot of r37 for release as v1.0.1, provided it for download at GC, and submitted it to FreeBSD ports ••••
 
 
