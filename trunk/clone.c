@@ -43,7 +43,7 @@
 #include "utils.h"
 
 
-static const char *version = "Version 1.0.1 (r"STRINGIFY(SVNREV)")";
+static const char *version = "Version 1.0.2b (r"STRINGIFY(SVNREV)")";
 
 dev_t  gSourceDev;
 
@@ -222,8 +222,6 @@ QItem *dispenseNewQItem(void)
    }
 
    qitem = &gQItemDispenser[gNextQItemSN];
-   qitem->stage = virgin;
-   qitem->chunk = NULL;
 
    if (++gNextQItemSN >= maxQItemCount)
    {
@@ -355,7 +353,7 @@ void *reader(void *threadArg)
          close(in);
       }
 
-      else
+      else // (in == -1)
       {
          // Most probably, the file has been deleted after it was scheduled for copying.
          // Drop a message, release any allocated memory, invalidate the queue items chunk,
@@ -381,33 +379,28 @@ void *writer(void *threadArg)
 
    while (gRunning)
    {
-      QItem *pqitem, qitem;
+      QItem *qitem;
+      llong  fid;
 
       pthread_mutex_lock(&writer_mutex);
-      while ((pqitem = informWritingQItem()) == NULL) // wait for items that are ready for writing
+      while ((qitem = informWritingQItem()) == NULL)  // wait for items that are ready for writing
       {
          gWriterWait = true;
          pthread_cond_wait(&writer_cond, &writer_mutex);
          gWriterWait = false;
       }
 
-      pqitem->stage = writing;
-      qitem = *pqitem;
+      qitem->stage = writing;
+      fid = qitem->fid;
       pthread_mutex_unlock(&writer_mutex);
 
-      recycleFinishedQItem(pqitem);
 
-      pthread_mutex_lock(&reader_mutex);
-      if (gReaderWait)
-         pthread_cond_signal(&reader_cond);
-      pthread_mutex_unlock(&reader_mutex);
+      if (qitem->chunk == INVALIDATED)                // check for an invalidated chunk pointer
+         goto cleanfinish;                            // skip writing
 
-      if (qitem.chunk == INVALIDATED) // check for an invalidated chunk pointer
-         goto finish;                 // skip writing
+      CopyChunk *chunk = qitem->chunk;
 
-      CopyChunk *chunk = qitem.chunk;
-
-      int out = open(qitem.dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, qitem.st.st_mode & ALLPERMS);
+      int out = open(qitem->dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, qitem->st.st_mode & ALLPERMS);
       if (out != -1)
       {
          if (gWriteNoCache) fnocache(out);
@@ -442,7 +435,7 @@ void *writer(void *threadArg)
             else
             {
                strerror_r(abs(rc = DST_ERROR), errorString, errStrLen);
-               printf("\nWrite error on file %s: %s.\n", qitem.dst, errorString);
+               printf("\nWrite error on file %s: %s.\n", qitem->dst, errorString);
             }
 
          } while (state != final && rc == NO_ERROR);
@@ -454,12 +447,12 @@ void *writer(void *threadArg)
             gTotalItems++;
             gTotalSize += filesize;
 
-            if (filesize != qitem.st.st_size &&             // if the filesize changed then most probably
-                lstat(qitem.src, &qitem.st) != NO_ERROR)    // other things changed too, so lstat() again.
+            if (filesize != qitem->st.st_size &&            // if the filesize changed then most probably
+                lstat(qitem->src, &qitem->st) != NO_ERROR)  // other things changed too, so lstat() again.
                rc = SRC_ERROR;
          }
 
-         else
+         else // (rc != NO_ERROR)
          {
             // 1. clean up
             while (state != final)
@@ -478,31 +471,25 @@ void *writer(void *threadArg)
             }
 
             // 2. try again using the atomic file copy routine
-            rc = atomCopy(qitem.src, qitem.dst, &qitem.st);
+            rc = atomCopy(qitem->src, qitem->dst, &qitem->st);
          }
 
          // Error check again -- the atomic file copy may have resolved a previous issue
          if (rc == NO_ERROR)
-            setAttributes(qitem.src, qitem.dst, &qitem.st);
+            setAttributes(qitem->src, qitem->dst, &qitem->st);
 
-         else
+         else // (rc != NO_ERROR)
          {
             strerror_r(abs(rc), errorString, errStrLen);
-            printf("\nFile %s could not be copied to %s: %s.\n", qitem.src, qitem.dst, errorString);
+            printf("\nFile %s could not be copied to %s: %s.\n", qitem->src, qitem->dst, errorString);
          }
-
-         free(qitem.src);
-         free(qitem.dst);
       }
 
-      else
+      else // (out == -1)
       {
          // Drop a message, remove the file from the queue, and clean-up without further notice.
          strerror_r(errno, errorString, errStrLen);
-         printf("\nFile %s could not be opened for writing: %s.\n", qitem.dst, errorString);
-
-         free(qitem.src);
-         free(qitem.dst);
+         printf("\nFile %s could not be opened for writing: %s.\n", qitem->dst, errorString);
 
          int state;
          do
@@ -524,9 +511,18 @@ void *writer(void *threadArg)
          } while (state != final);
       }
 
-   finish:
+   cleanfinish:
+      free(qitem->dst);
+      free(qitem->src);
+      recycleFinishedQItem(qitem);
+
+      pthread_mutex_lock(&reader_mutex);
+      if (gReaderWait)
+         pthread_cond_signal(&reader_cond);
+      pthread_mutex_unlock(&reader_mutex);
+
       pthread_mutex_lock(&level_mutex);
-      gWriterLast = qitem.fid;
+      gWriterLast = fid;
       if (gLevelWait)
          pthread_cond_signal(&level_cond);
       pthread_mutex_unlock(&level_mutex);
@@ -606,8 +602,8 @@ int hlnkCopy(char *src, char *dst, size_t dl, struct stat *st)
    if (rc == NO_ERROR)
       setAttributes(src, dst, st);
 
-   free(src);
    free(dst);
+   free(src);
 
    return rc;
 }
@@ -628,8 +624,8 @@ int fileEmpty(char *src, char *dst, struct stat *st)
    else
       rc = DST_ERROR;
 
-   free(src);
    free(dst);
+   free(src);
    return rc;
 }
 
@@ -692,8 +688,8 @@ int slnkCopy(char *src, char *dst, struct stat *st)
 
 cleanup:
    free(revpath);
-   free(src);
    free(dst);
+   free(src);
    return rc;
 }
 
@@ -926,8 +922,8 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                   if (!S_ISDIR(dstat.st_mode))
                   {
                      // Yes, it is, so skip it!
-                     free(nsrc);
                      free(ndst);
+                     free(nsrc);
                      continue;
                   }
                }
@@ -942,8 +938,8 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                   // If it cannot be deleted, it cannot be overwritten either.
                   // A message has already been dropped, and there is nothing
                   // good left to be done here, so skip this one.
-                  free(nsrc);
                   free(ndst);
+                  free(nsrc);
                   continue;
                }
             }
@@ -982,8 +978,8 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                      printf("\nDestination directory %s could not be created: %s.\n", ndst, errorString);
                   }
 
-                  free(nsrc);
                   free(ndst);
+                  free(nsrc);
                   break;
 
                case S_IFREG:      // A regular file.
@@ -1039,8 +1035,8 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                   ftype = "of unknown type";
                special:
                   printf("\n%s is %s, and it is not copied.\n", nsrc, ftype);
-                  free(nsrc);
                   free(ndst);
+                  free(nsrc);
                   break;
             }
          }
@@ -1088,8 +1084,8 @@ bool intersectPaths(char *src, char *dst)
          size_t drl = strlen(drp);
          if (chk = (strstr(drp, srp) == drp && (srl == drl || drp[srl] == '/')))
             printf("Absolute destination %s must not be a child of the source path %s.", drp, srp);
-         free(srp);
          free(drp);
+         free(srp);
       }
 
       else
