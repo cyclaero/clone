@@ -6,6 +6,11 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced by ••••
 
 
+2013-02-23 13:18  rj - r39
+
+   * clone.c, utils.h:
+     - streamlined stage passing between reader() and writer()
+
 2013-02-22 11:10  rj - r38
 
    * clone.c:
