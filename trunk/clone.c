@@ -189,7 +189,7 @@ void recycleFinishedChunk(CopyChunk *chunk)
 
 #pragma pack(16)
 
-enum {virgin = -1, nascent, reading, writing};
+enum {virgin, nascent, reading, writing, skipping};
 
 typedef struct
 {
@@ -252,7 +252,7 @@ QItem *informWritingQItem(void)
 
    pthread_mutex_lock(&qitem_mutex);
    qitem = &gQItemDispenser[gBaseQItemSN];
-   if (!qitem->chunk || (qitem->stage != reading && qitem->stage != writing))
+   if (qitem->stage != writing && qitem->stage != skipping)
       qitem = NULL;
    pthread_mutex_unlock(&qitem_mutex);
 
@@ -269,7 +269,6 @@ void recycleFinishedQItem(QItem *qitem)
       if (qitemSN >= gBaseQItemSN)
       {
          qitem->stage = virgin;
-         qitem->chunk = NULL;
 
          gBaseQItemSN = qitemSN + 1;
          if (gBaseQItemSN >= maxQItemCount)
@@ -306,7 +305,7 @@ void *reader(void *threadArg)
          pthread_cond_wait(&reader_cond, &reader_mutex);
          gReaderWait = false;
       }
-      qitem->stage = reading;
+      qitem->stage = reading;                         // ready for reading now
       pthread_mutex_unlock(&reader_mutex);
 
 
@@ -315,7 +314,6 @@ void *reader(void *threadArg)
       {
          if (gReadNoCache) fnocache(in);
 
-         bool       first = true;
          int        state;
          size_t     size;
          CopyChunk *chunk;
@@ -334,7 +332,7 @@ void *reader(void *threadArg)
             {
                // Nothing good can be done here. Only drop a, message, and set the chunk size to 0.
                // The writer has to resolve the issue. Perhaps it is already waiting for the next chunk,
-               // and therefore, the processe may not be stopped here.
+               // and therefore, the process may not be stopped here.
                chunk->rc    = SRC_ERROR;
                chunk->size  = 0;
                chunk->state = state = final;
@@ -343,8 +341,11 @@ void *reader(void *threadArg)
             }
 
             pthread_mutex_lock(&writer_mutex);
-            if (first)
-               first = false, qitem->chunk = chunk;
+            if (qitem->stage == reading)
+            {
+               qitem->chunk = chunk;
+               qitem->stage = writing;       // ready for writing now
+            }
             if (gWriterWait)
                pthread_cond_signal(&writer_cond);
             pthread_mutex_unlock(&writer_mutex);
@@ -356,13 +357,12 @@ void *reader(void *threadArg)
       else // (in == -1)
       {
          // Most probably, the file has been deleted after it was scheduled for copying.
-         // Drop a message, release any allocated memory, invalidate the queue items chunk,
-         // so the writer does skip this one.
+         // Drop a message, and tell the writer to skip this one.
          strerror_r(errno, errorString, errStrLen);
          printf("\nFile %s could not be opened for reading: %s.\n", qitem->src, errorString);
 
          pthread_mutex_lock(&writer_mutex);
-         qitem->chunk = INVALIDATED;
+         qitem->stage = skipping;            // do not write anything, only clean-up
          if (gWriterWait)
             pthread_cond_signal(&writer_cond);
          pthread_mutex_unlock(&writer_mutex);
@@ -390,13 +390,12 @@ void *writer(void *threadArg)
          gWriterWait = false;
       }
 
-      qitem->stage = writing;
       fid = qitem->fid;
       pthread_mutex_unlock(&writer_mutex);
 
 
-      if (qitem->chunk == INVALIDATED)                // check for an invalidated chunk pointer
-         goto cleanfinish;                            // skip writing
+      if (qitem->stage == skipping)                   // check for an invalidated qitem
+         goto cleanup;                                // skip writing
 
       CopyChunk *chunk = qitem->chunk;
 
@@ -405,8 +404,8 @@ void *writer(void *threadArg)
       {
          if (gWriteNoCache) fnocache(out);
 
-         int   state, rc = NO_ERROR;
-         size_t filesize = 0;
+         int    state, rc = NO_ERROR;
+         size_t fsize = 0;
          do
          {
             state = chunk->state;
@@ -416,7 +415,7 @@ void *writer(void *threadArg)
 
             else if (chunk->size == 0 || write(out, chunk->buffer, chunk->size) != -1)
             {
-               filesize += chunk->size;
+               fsize += chunk->size;
                recycleFinishedChunk(chunk);
 
                if (state != final)
@@ -437,7 +436,6 @@ void *writer(void *threadArg)
                strerror_r(abs(rc = DST_ERROR), errorString, errStrLen);
                printf("\nWrite error on file %s: %s.\n", qitem->dst, errorString);
             }
-
          } while (state != final && rc == NO_ERROR);
 
          close(out);
@@ -445,9 +443,9 @@ void *writer(void *threadArg)
          if (rc == NO_ERROR)
          {
             gTotalItems++;
-            gTotalSize += filesize;
+            gTotalSize += fsize;
 
-            if (filesize != qitem->st.st_size &&            // if the filesize changed then most probably
+            if (fsize != qitem->st.st_size &&               // if the file size changed then most probably
                 lstat(qitem->src, &qitem->st) != NO_ERROR)  // other things changed too, so lstat() again.
                rc = SRC_ERROR;
          }
@@ -511,7 +509,7 @@ void *writer(void *threadArg)
          } while (state != final);
       }
 
-   cleanfinish:
+   cleanup:
       free(qitem->dst);
       free(qitem->src);
       recycleFinishedQItem(qitem);
@@ -1350,10 +1348,7 @@ int main(int argc, char *const argv[])
          gChunkDispenser[i].state = empty;
 
       for (i = 0; i < maxQItemCount; i++)
-      {
          gQItemDispenser[i].stage = virgin;
-         gQItemDispenser[i].chunk = NULL;
-      }
 
       pthread_attr_init(&thread_attrib);
       pthread_attr_setstacksize(&thread_attrib, 1048576);

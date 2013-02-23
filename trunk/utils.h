@@ -29,7 +29,6 @@
 #define  NO_ERROR   0
 #define SRC_ERROR   -errno       // negative errors indicate a problem with the source.
 #define DST_ERROR   +errno       // positive errors indicate a problem with the destination.
-#define INVALIDATED (void *)-1   // marker for an invalidated pointer
 
 
 #define ENQUOTING(cvar) #cvar
