@@ -6,6 +6,11 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced by ••••
 
 
+2013-06-01 04:13  rj - r40
+
+   * clone.c, utils.h:
+     - formatting, orthography
+
 2013-02-23 13:18  rj - r39
 
    * clone.c, utils.h:
