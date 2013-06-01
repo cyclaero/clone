@@ -752,7 +752,7 @@ void releaseTable(Node *table[])
 // two sets of find...(), store...(), and remove...() functions.
 
 
-// Storing/Retrieving file system names by inode
+// Storing/retrieving file system names by inode
 Node *findINode(Node *table[], ulong inode)
 {
    uint n = *(uint *)table;
@@ -770,7 +770,7 @@ Node *storeINode(Node *table[], ulong inode, const char *fsname, size_t namlen, 
 
 void removeINode(Node *table[], ulong inode)
 {
-   uint  tidx = inode % *(uint*)table + 1;
+   uint  tidx = inode % *(uint *)table + 1;
    Node *node = table[tidx];
    if (node && !node->L && !node->R)
    {
@@ -784,7 +784,7 @@ void removeINode(Node *table[], ulong inode)
 }
 
 
-// Storing retrieving file system names
+// Storing/retrieving file system names
 Node *findFSName(Node *table[], const char *fsname, size_t namlen)
 {
    if (fsname && *fsname)
@@ -816,7 +816,7 @@ void removeFSName(Node *table[], const char *fsname, size_t namlen)
    if (fsname && *fsname)
    {
       ulong hkey = mmh3(fsname, namlen);
-      uint  tidx = hkey % *(uint*)table + 1;
+      uint  tidx = hkey % *(uint *)table + 1;
       Node *node = table[tidx];
       if (node && !node->L && !node->R)
       {

@@ -881,7 +881,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                continue;
 
             // next source path
-            size_t nsl  = sl + sep->d_namlen;  // next source length
+            size_t nsl  = sl + sep->d_namlen;   // next source length
             char  *nsrc = strcpy(malloc(nsl+2), src); strcpy(nsrc+sl, sep->d_name);
             struct stat sstat;
 
@@ -893,11 +893,11 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
             }
 
             // next destination path
-            size_t ndl  = dl + sep->d_namlen;  // next destination length
+            size_t ndl  = dl + sep->d_namlen;   // next destination length
             char  *ndst = strcpy(malloc(ndl+2), dst); strcpy(ndst+dl, sep->d_name);
             struct stat dstat; dstat.st_ino = 0;
 
-            if (syncEntities &&    // only non-NULL in incremental or synchronize mode
+            if (syncEntities &&                 // only non-NULL in incremental or synchronize mode
                 (syncNode = findFSName(syncEntities, sep->d_name, sep->d_namlen)))
             {
                removeFSName(syncEntities, sep->d_name, sep->d_namlen);
