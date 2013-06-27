@@ -43,7 +43,7 @@
 #include "utils.h"
 
 
-static const char *version = "Version 1.0.2b (r"STRINGIFY(SVNREV)")";
+static const char *version = "Version 1.0.2 (r"STRINGIFY(SVNREV)")";
 
 dev_t  gSourceDev;
 
@@ -846,20 +846,27 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
    if ((gIncremental || gSynchronize) && (ddp = opendir(dst)))
    {
       struct stat st;
+      Value  value = {Simple, {0}};
       syncEntities = createTable(1024);
       while (readdir_r(ddp, &bep, &dep) == NO_ERROR && dep)
          if ( dep->d_name[0] != '.' || (dep->d_name[1] != '\0' &&
              (dep->d_name[1] != '.' ||  dep->d_name[2] != '\0')))
          {
             if (dep->d_type == DT_DIR || dep->d_type == DT_REG || dep->d_type == DT_LNK)
-               storeFSName(syncEntities, dep->d_name, dep->d_namlen, NULL);
+            {
+               value.v.i = dtType2stFmt(dep->d_type);
+               storeFSName(syncEntities, dep->d_name, dep->d_namlen, &value);
+            }
 
             else if (dep->d_type == DT_UNKNOWN)    // need to call lstat()
             {
                char path[dl+dep->d_namlen+1]; strcpy(path, dst); strcpy(path+dl, dep->d_name);
                if (lstat(path, &st) != -1 &&
                    ((st.st_mode &= S_IFMT) == S_IFDIR || st.st_mode == S_IFREG || st.st_mode == S_IFLNK))
-                  storeFSName(syncEntities, dep->d_name, dep->d_namlen, NULL);
+               {
+                  value.v.i = st.st_mode;
+                  storeFSName(syncEntities, dep->d_name, dep->d_namlen, &value);
+               }
             }
          }
 

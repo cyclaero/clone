@@ -6,6 +6,14 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced by ••••
 
 
+•••• 2013-06-27 -- Created a snapshot of r41 for release as v1.0.2, provided it for download at GC, and submitted it to FreeBSD ports ••••
+
+2013-06-27 10:03  rj - r41
+
+   * clone.c
+     - fixed deletion of directories and files in the destination in synchronization mode
+     - release of version to 1.0.2 (r41)
+
 2013-06-01 04:13  rj - r40
 
    * clone.c, utils.h:
