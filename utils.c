@@ -66,8 +66,11 @@ void setAttributes(const char *src, const char *dst, struct stat *st)
 
       struct timeval tv[2];
       tv[0].tv_sec = st->st_atimespec.tv_sec, tv[0].tv_usec = (int)(st->st_atimespec.tv_nsec/1000);
-      tv[1].tv_sec = st->st_birthtimespec.tv_sec, tv[1].tv_usec = (int)(st->st_birthtimespec.tv_nsec/1000);
-      lutimes(dst, tv);
+      if (st->st_birthtimespec.tv_sec != -1)
+      {
+         tv[1].tv_sec = st->st_birthtimespec.tv_sec, tv[1].tv_usec = (int)(st->st_birthtimespec.tv_nsec/1000);
+         lutimes(dst, tv);
+      }
       tv[1].tv_sec = st->st_mtimespec.tv_sec, tv[1].tv_usec = (int)(st->st_mtimespec.tv_nsec/1000);
       lutimes(dst, tv);
    }
@@ -183,8 +186,11 @@ void setAttributes(const char *src, const char *dst, struct stat *st)
 
       struct timeval tv[2];
       tv[0].tv_sec = st->st_atimespec.tv_sec, tv[0].tv_usec = (int)(st->st_atimespec.tv_nsec/1000);
-      tv[1].tv_sec = st->st_birthtimespec.tv_sec, tv[1].tv_usec = (int)(st->st_birthtimespec.tv_nsec/1000);
-      lutimes(dst, tv);
+      if (st->st_birthtimespec.tv_sec != -1)
+      {
+         tv[1].tv_sec = st->st_birthtimespec.tv_sec, tv[1].tv_usec = (int)(st->st_birthtimespec.tv_nsec/1000);
+         lutimes(dst, tv);
+      }
       tv[1].tv_sec = st->st_mtimespec.tv_sec, tv[1].tv_usec = (int)(st->st_mtimespec.tv_nsec/1000);
       lutimes(dst, tv);
 

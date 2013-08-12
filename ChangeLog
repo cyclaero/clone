@@ -6,6 +6,11 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced by ••••
 
 
+2013-08-12 23:33  rj - r43
+
+   * utils.c
+     - set st_birthtimespec to the cloned item only if it got a valid value.
+
 2013-08-12 23:20  rj - r42
 
    * clone.c
