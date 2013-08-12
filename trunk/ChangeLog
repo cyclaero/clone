@@ -6,6 +6,11 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced by ••••
 
 
+2013-08-12 23:20  rj - r42
+
+   * clone.c
+     - NFS and other file systems don't have file creation dates, so desconsider st_birthtimespec in these cases.
+
 •••• 2013-06-27 -- Created a snapshot of r41 for release as v1.0.2, provided it for download at GC, and submitted it to FreeBSD ports ••••
 
 2013-06-27 10:03  rj - r41

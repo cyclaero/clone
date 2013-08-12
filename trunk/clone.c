@@ -43,7 +43,7 @@
 #include "utils.h"
 
 
-static const char *version = "Version 1.0.2 (r"STRINGIFY(SVNREV)")";
+static const char *version = "Version 1.0.3b (r"STRINGIFY(SVNREV)")";
 
 dev_t  gSourceDev;
 
@@ -912,17 +912,17 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                // This file system name is already present at the destination,
                // but is it really exactly the same file or entity?
                if (lstat(ndst, &dstat) == NO_ERROR &&
-                  (S_ISDIR(dstat.st_mode) ||
-                   dstat.st_size                  == sstat.st_size) &&
                    dstat.st_uid                   == sstat.st_uid &&
                    dstat.st_gid                   == sstat.st_gid &&
                    dstat.st_mode                  == sstat.st_mode &&
                    dstat.st_flags                 == sstat.st_flags &&
                   (S_ISDIR(dstat.st_mode) ||
+                   dstat.st_size                  == sstat.st_size &&
                    dstat.st_mtimespec.tv_sec      == sstat.st_mtimespec.tv_sec &&
                    dstat.st_mtimespec.tv_nsec     == sstat.st_mtimespec.tv_nsec) &&
+                  (dstat.st_birthtimespec.tv_sec  == -1 || sstat.st_birthtimespec.tv_sec == -1 ||
                    dstat.st_birthtimespec.tv_sec  == sstat.st_birthtimespec.tv_sec &&
-                   dstat.st_birthtimespec.tv_nsec == sstat.st_birthtimespec.tv_nsec)
+                   dstat.st_birthtimespec.tv_nsec == sstat.st_birthtimespec.tv_nsec))
                {
                   if (!S_ISDIR(dstat.st_mode))
                   {
