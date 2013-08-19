@@ -3,20 +3,30 @@ This is the ChangeLog of the clone project
 Created by Dr. Rolf Jansen on 2013-02-19.
 Copyright (c) 2013. All rights reserved.
 
-Note: Milestones are embraced by ••••
+Note: Milestones are embraced with ••••
 
 
-2013-08-12 23:33  rj - r43
+2013-08-19 16:05  rj - r44
+
+   * clone.c, utils.h, utils.c
+     - added ToDo list at the head of the main file (clone.c).
+     - check source file system type and its readonly flag.
+     - if the source file system is readonly then make the clone writable by the owner.
+     - some code reorganizations, e.g. unction setAttributes() has been moved to the main file.
+
+2013-08-12 22:33  rj - r43
 
    * utils.c
      - set st_birthtimespec to the cloned item only if it got a valid value.
 
-2013-08-12 23:20  rj - r42
+2013-08-12 22:20  rj - r42
 
    * clone.c
      - NFS and other file systems don't have file creation dates, so desconsider st_birthtimespec in these cases.
 
+
 •••• 2013-06-27 -- Created a snapshot of r41 for release as v1.0.2, provided it for download at GC, and submitted it to FreeBSD ports ••••
+
 
 2013-06-27 10:03  rj - r41
 
@@ -119,7 +129,7 @@ Note: Milestones are embraced by ••••
 2013-02-15 00:30  rj - r26
 
    * clone.c, utils.c:
-     - on Mac OS X, the d_type field of struct dirent does not reliable indicate
+     - on Mac OS X, the d_type field of struct dirent does not reliably indicate
        the type for external file systems (e.g. NFS shares, UDF volumes, ??),
        therefore, need to switch most of the calls to stat() to lstat(),
        and extract the file type from the st_mode field of struct stat.

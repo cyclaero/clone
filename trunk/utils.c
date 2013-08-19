@@ -39,20 +39,6 @@
 #include "utils.h"
 
 
-#pragma mark ••• Passing all Attribute •••
-
-void setAttributes(const char *src, const char *dst, struct stat *st)
-{
-   ExtMetaData xmd;
-   getMetaData(src, &xmd);
-   setMetaData(dst, &xmd);
-
-   lchown(dst, st->st_uid, st->st_gid);
-   lchmod(dst, st->st_mode & ALLPERMS);
-   setTimesFlags(dst, st);
-}
-
-
 #pragma mark ••• Setting Times/Flags and Copying Extended Meta Data - EXAs & ACLs •••
 
 #if defined (__APPLE__)

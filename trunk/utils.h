@@ -34,6 +34,8 @@
 #define ENQUOTING(cvar) #cvar
 #define STRINGIFY(cvar) ENQUOTING(cvar)
 
+#define modperms(mode) (mode&ALLPERMS | ((gSourceRdOnly) ? S_IWUSR : 0))
+
 
 typedef unsigned char      uchar;
 typedef unsigned short     ushort;
@@ -44,7 +46,6 @@ typedef long long          llong;
 typedef unsigned long long ullong;
 
 
-void setAttributes(const char *src, const char *dst, struct stat *st);
 void setTimesFlags(const char *dst, struct stat *st);
 
 

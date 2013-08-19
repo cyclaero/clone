@@ -23,6 +23,11 @@
 //  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 //  THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/*
+   ToDo:
+   - for backups to remote read-only stores, fetch a copy of the remote file tree.
+   - add a command line option for forcing uid:gid+flags.
+*/
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -38,6 +43,8 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/param.h>
+#include <sys/mount.h>
 #include <sys/acl.h>
 
 #include "utils.h"
@@ -45,7 +52,10 @@
 
 static const char *version = "Version 1.0.3b (r"STRINGIFY(SVNREV)")";
 
+// Source device and file system information
 dev_t  gSourceDev;
+char  *gSourceFSType;
+bool   gSourceRdOnly;
 
 // Mode Flags
 bool   gReadNoCache  = false;
@@ -288,6 +298,22 @@ void recycleFinishedQItem(QItem *qitem)
 }
 
 
+#pragma mark ••• Passing the Attributes •••
+
+void setAttributes(const char *src, const char *dst, struct stat *st)
+{
+   ExtMetaData xmd;
+   getMetaData(src, &xmd);
+   setMetaData(dst, &xmd);
+
+   lchown(dst, st->st_uid, st->st_gid);
+   lchmod(dst, modperms(st->st_mode));
+   setTimesFlags(dst, st);
+}
+
+
+#pragma mark ••• Threaded Copying •••
+
 int atomCopy(char *src, char *dst, struct stat *st);
 
 void *reader(void *threadArg)
@@ -399,7 +425,7 @@ void *writer(void *threadArg)
 
       CopyChunk *chunk = qitem->chunk;
 
-      int out = open(qitem->dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, qitem->st.st_mode & ALLPERMS);
+      int out = open(qitem->dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, modperms(qitem->st.st_mode));
       if (out != -1)
       {
          if (gWriteNoCache) fnocache(out);
@@ -530,11 +556,29 @@ void *writer(void *threadArg)
 }
 
 
+void fileCopyScheduler(llong fid, char *src, char *dst, struct stat *st)
+{
+   QItem *qitem = dispenseNewQItem();
+
+   pthread_mutex_lock(&reader_mutex);
+   qitem->stage = nascent;
+   qitem->fid   = fid;
+   qitem->src   = src;
+   qitem->dst   = dst;
+   qitem->st    = *st;
+   if (gReaderWait)
+      pthread_cond_signal(&reader_cond);
+   pthread_mutex_unlock(&reader_mutex);
+}
+
+
+#pragma mark ••• Atomic Copying •••
+
 int atomCopy(char *src, char *dst, struct stat *st)
 {
    int in, out;
    if ((in = open(src, O_RDONLY)) != -1)
-      if ((out = open(dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, st->st_mode & ALLPERMS)) != -1)
+      if ((out = open(dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, modperms(st->st_mode))) != -1)
       {
          if (gReadNoCache)  fnocache(in);
          if (gWriteNoCache) fnocache(out);
@@ -610,7 +654,7 @@ int hlnkCopy(char *src, char *dst, size_t dl, struct stat *st)
 int fileEmpty(char *src, char *dst, struct stat *st)
 {
    int rc;
-   int out = open(dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, st->st_mode & ALLPERMS);
+   int out = open(dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, modperms(st->st_mode));
    if (out != -1)
    {
       close(out);
@@ -625,22 +669,6 @@ int fileEmpty(char *src, char *dst, struct stat *st)
    free(dst);
    free(src);
    return rc;
-}
-
-
-void fileCopyScheduler(llong fid, char *src, char *dst, struct stat *st)
-{
-   QItem *qitem = dispenseNewQItem();
-
-   pthread_mutex_lock(&reader_mutex);
-   qitem->stage = nascent;
-   qitem->fid   = fid;
-   qitem->src   = src;
-   qitem->dst   = dst;
-   qitem->st    = *st;
-   if (gReaderWait)
-      pthread_cond_signal(&reader_cond);
-   pthread_mutex_unlock(&reader_mutex);
 }
 
 
@@ -691,6 +719,8 @@ cleanup:
    return rc;
 }
 
+
+#pragma mark ••• Directory Traversal •••
 
 int dtType2stFmt(int d_type)
 {
@@ -892,8 +922,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
             char  *nsrc = strcpy(malloc(nsl+2), src); strcpy(nsrc+sl, sep->d_name);
             struct stat sstat;
 
-            if (gExcludeList && findFSName(gExcludeList, nsrc, nsl) ||
-                lstat(nsrc, &sstat) != NO_ERROR)
+            if (gExcludeList && findFSName(gExcludeList, nsrc, nsl) || lstat(nsrc, &sstat) != NO_ERROR)
             {
                free(nsrc);
                continue;
@@ -955,22 +984,14 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
             {
                case S_IFDIR:      // A directory.
                   if ((dstat.st_ino != 0 || lstat(ndst, &dstat) == NO_ERROR) && S_ISDIR(dstat.st_mode) ||
-                       dstat.st_ino == 0 && (dirCreated = (mkdir(ndst, sstat.st_mode & ALLPERMS) == NO_ERROR)))
+                       dstat.st_ino == 0 && (dirCreated = (mkdir(ndst, modperms(sstat.st_mode)) == NO_ERROR)))
                   {
                      putc('.', stdout); fflush(stdout);
                      *(short *)&nsrc[nsl++] = *(short *)&ndst[ndl++] = *(short *)"/";
                      if (sstat.st_dev == gSourceDev)
-                     {
                         clone(nsrc, nsl, ndst, ndl);
-                        setAttributes(nsrc, ndst, &sstat);
-                     }
 
-                     else
-                     {
-                        lchown(ndst, sstat.st_uid, sstat.st_gid);
-                        lchmod(ndst, sstat.st_mode & ALLPERMS);
-                        setTimesFlags(ndst, &sstat);
-                     }
+                     setAttributes(nsrc, ndst, &sstat);
 
                      if (dirCreated)
                         gTotalItems++;
@@ -1077,6 +1098,8 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
 }
 
 
+#pragma mark ••• Main •••
+
 bool intersectPaths(char *src, char *dst)
 {
    bool  chk = true;    // assume intersection
@@ -1105,6 +1128,7 @@ bool intersectPaths(char *src, char *dst)
    return chk;
 }
 
+
 bool ynPrompt(const char *request, const char *object, int defponse)
 {
    printf(request, object, defponse);
@@ -1115,6 +1139,7 @@ bool ynPrompt(const char *request, const char *object, int defponse)
 
    return (response == 'y' || response == 'Y') ? true : false;
 }
+
 
 void usage(const char *executable)
 {
@@ -1319,8 +1344,8 @@ int main(int argc, char *const argv[])
       printf("Source %s is not a directory.\n", argv[0]);
 
    else if (lstat(dst, &dstat) != NO_ERROR &&
-            ((d_flag = !(dirCreated = (mkdir(dst, sstat.st_mode & ALLPERMS) == NO_ERROR))) ||   // in the case of a successfull mkdir(), d_flag is set to false
-             lstat(dst, &dstat) != NO_ERROR))                                                   // this prevents deleteDir() from running on an empty directory.
+            ((d_flag = !(dirCreated = (mkdir(dst, sstat.st_mode&ALLPERMS | S_IWUSR) == NO_ERROR))) ||   // in the case of a successfull mkdir(), d_flag is set to false
+             lstat(dst, &dstat) != NO_ERROR))                                                           // this prevents deleteDir() from running on an empty directory.
       printf("The destination directory %s did not exist and a new one could not be created: %s.\n", argv[1], strerror(errno));
 
    else if (!dirCreated && !S_ISDIR(dstat.st_mode))
@@ -1345,7 +1370,13 @@ int main(int argc, char *const argv[])
       struct timeval t0, t1;
       gettimeofday(&t0, NULL);
 
-      gSourceDev   = sstat.st_dev;
+      gSourceDev = sstat.st_dev;
+
+      struct statfs sfs;
+      statfs(src, &sfs);
+      gSourceFSType = sfs.f_fstypename;
+      gSourceRdOnly = sfs.f_flags & MNT_RDONLY;
+
       gHLinkINodes = createTable(8192);
       if (dirCreated)
          gTotalItems++;
