@@ -6,6 +6,12 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
+2013-08-27 18:25  rj - r45
+
+   * clone.c, utils.c
+     - Formatting.
+     - Changed parameter name inode to key in findINode(), storeINode(), removeINode().
+
 2013-08-19 16:05  rj - r44
 
    * clone.c, utils.h, utils.c

@@ -745,24 +745,24 @@ void releaseTable(Node *table[])
 
 
 // Storing/retrieving file system names by inode
-Node *findINode(Node *table[], ulong inode)
+Node *findINode(Node *table[], ulong key)
 {
    uint n = *(uint *)table;
-   return findTreeNode(inode, NULL, table[inode%n + 1]);
+   return findTreeNode(key, NULL, table[key%n + 1]);
 }
 
-Node *storeINode(Node *table[], ulong inode, const char *fsname, size_t namlen, long dev)
+Node *storeINode(Node *table[], ulong key, const char *fsname, size_t namlen, long dev)
 {
    uint  n = *(uint *)table;
    Value value = {Simple, {.i = dev}};
    Node *passed;
-   addTreeNode(inode, fsname, namlen, &value, &table[inode%n + 1], &passed);
+   addTreeNode(key, fsname, namlen, &value, &table[key%n + 1], &passed);
    return passed;
 }
 
-void removeINode(Node *table[], ulong inode)
+void removeINode(Node *table[], ulong key)
 {
-   uint  tidx = inode % *(uint *)table + 1;
+   uint  tidx = key % *(uint *)table + 1;
    Node *node = table[tidx];
    if (node && !node->L && !node->R)
    {
@@ -772,7 +772,7 @@ void removeINode(Node *table[], ulong inode)
       table[tidx] = NULL;
    }
    else
-      removeTreeNode(inode, NULL, &table[tidx]);
+      removeTreeNode(key, NULL, &table[tidx]);
 }
 
 
