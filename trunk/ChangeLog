@@ -6,6 +6,11 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
+2013-11-11 20:13  rj - r46
+
+   * clone.c
+     - Allow deleting local-domain sockets and whiteout files.
+
 2013-08-27 18:25  rj - r45
 
    * clone.c, utils.c
