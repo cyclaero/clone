@@ -774,6 +774,8 @@ int deleteDirEntity(char *path, size_t pl, long st_mode)
 
       case S_IFREG:      // A regular file.
       case S_IFLNK:      // A symbolic link.
+      case S_IFSOCK:     // A local-domain socket.
+      case S_IFWHT:      // A whiteout file. (somehow deleted, but not eventually yet)
          lchflags(path, 0);
          if (unlink(path) != NO_ERROR)
          {
@@ -791,12 +793,6 @@ int deleteDirEntity(char *path, size_t pl, long st_mode)
          goto special;
       case S_IFBLK:      // A block device.
          ftype = "a block device";
-         goto special;
-      case S_IFSOCK:     // A local-domain socket.
-         ftype = "a local-domain socket";
-         goto special;
-      case S_IFWHT:      // A whiteout file. (somehow deleted, but not eventually yet)
-         ftype = "a unsupported whiteout file";
          goto special;
       default:
          ftype = "of unknown type";
