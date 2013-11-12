@@ -51,7 +51,7 @@
 #include "utils.h"
 
 
-static const char *version = "Version 1.0.3b (r"STRINGIFY(SVNREV)")";
+static const char *version = "Version 1.0.3 (r"STRINGIFY(SVNREV)")";
 
 // Source device and file system information
 dev_t  gSourceDev;
@@ -772,6 +772,7 @@ int deleteDirEntity(char *path, size_t pl, long st_mode)
          }
          break;
 
+      case S_IFIFO:      // A named pipe or FIFO.
       case S_IFREG:      // A regular file.
       case S_IFLNK:      // A symbolic link.
       case S_IFSOCK:     // A local-domain socket.
@@ -785,9 +786,6 @@ int deleteDirEntity(char *path, size_t pl, long st_mode)
          }
          break;
 
-      case S_IFIFO:      // A named pipe or FIFO.
-         ftype = "a named pipe or FIFO";
-         goto special;
       case S_IFCHR:      // A character device.
          ftype = "a character device";
          goto special;
@@ -937,18 +935,22 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
 
                // This file system name is already present at the destination,
                // but is it really exactly the same file or entity?
-               if (lstat(ndst, &dstat) == NO_ERROR &&
-                   dstat.st_uid                   == sstat.st_uid &&
-                   dstat.st_gid                   == sstat.st_gid &&
-                   dstat.st_mode                  == sstat.st_mode &&
-                   dstat.st_flags                 == sstat.st_flags &&
-                  (S_ISDIR(dstat.st_mode) ||
-                   dstat.st_size                  == sstat.st_size &&
-                   dstat.st_mtimespec.tv_sec      == sstat.st_mtimespec.tv_sec &&
-                   dstat.st_mtimespec.tv_nsec     == sstat.st_mtimespec.tv_nsec) &&
-                  (dstat.st_birthtimespec.tv_sec  == -1 || sstat.st_birthtimespec.tv_sec == -1 ||
-                   dstat.st_birthtimespec.tv_sec  == sstat.st_birthtimespec.tv_sec &&
-                   dstat.st_birthtimespec.tv_nsec == sstat.st_birthtimespec.tv_nsec))
+               if (lstat(ndst, &dstat) == NO_ERROR       &&
+                   dstat.st_uid        == sstat.st_uid   &&
+                   dstat.st_gid        == sstat.st_gid   &&
+                   dstat.st_mode       == sstat.st_mode  &&
+                   dstat.st_flags      == sstat.st_flags &&
+                   (S_ISDIR(dstat.st_mode)                                   ||
+                    dstat.st_size              == sstat.st_size              &&
+                    dstat.st_mtimespec.tv_sec  == sstat.st_mtimespec.tv_sec  &&
+                    dstat.st_mtimespec.tv_nsec == sstat.st_mtimespec.tv_nsec &&
+                    (dstat.st_birthtimespec.tv_sec  == -1                            ||
+                     sstat.st_birthtimespec.tv_sec  == -1                            ||
+                     dstat.st_birthtimespec.tv_sec  == sstat.st_birthtimespec.tv_sec &&
+                     dstat.st_birthtimespec.tv_nsec == sstat.st_birthtimespec.tv_nsec
+                    )
+                   )
+                  )
                {
                   if (!S_ISDIR(dstat.st_mode))
                   {

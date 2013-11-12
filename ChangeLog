@@ -6,16 +6,25 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
+•••• 2013-11-12 -- Created a snapshot of r47 for release as v1.0.3, provided it for download at GC, and submitted it to FreeBSD ports ••••
+
+2013-11-12 10:27  rj - r47
+
+   * clone.c
+     - named pipes maybe deleted.
+     - don't check directories for birth time identity.
+     - release of version 1.0.3 (r47).
+
 2013-11-11 20:13  rj - r46
 
    * clone.c
-     - Allow deleting local-domain sockets and whiteout files.
+     - allow deleting local-domain sockets and whiteout files.
 
 2013-08-27 18:25  rj - r45
 
    * clone.c, utils.c
-     - Formatting.
-     - Changed parameter name inode to key in findINode(), storeINode(), removeINode().
+     - formatting.
+     - changed parameter name inode to key in findINode(), storeINode(), removeINode().
 
 2013-08-19 16:05  rj - r44
 
@@ -43,7 +52,7 @@ Note: Milestones are embraced with ••••
 
    * clone.c
      - fixed deletion of directories and files in the destination in synchronization mode
-     - release of version to 1.0.2 (r41)
+     - release of version 1.0.2 (r41).
 
 2013-06-01 04:13  rj - r40
 
