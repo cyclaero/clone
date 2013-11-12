@@ -51,7 +51,7 @@
 #include "utils.h"
 
 
-static const char *version = "Version 1.0.3 (r"STRINGIFY(SVNREV)")";
+static const char *version = "Version 1.0.4b (r"STRINGIFY(SVNREV)")";
 
 // Source device and file system information
 dev_t  gSourceDev;

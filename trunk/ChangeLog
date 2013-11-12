@@ -6,7 +6,15 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
+2013-11-12 18:32  rj - r48
+
+   * clone.c, ChangeLog
+     - corrected spelling in the ChangeLog.
+     - set version to 1.0.4b.
+
+
 •••• 2013-11-12 -- Created a snapshot of r47 for release as v1.0.3, provided it for download at GC, and submitted it to FreeBSD ports ••••
+
 
 2013-11-12 10:27  rj - r47
 
@@ -32,7 +40,7 @@ Note: Milestones are embraced with ••••
      - added ToDo list at the head of the main file (clone.c).
      - check source file system type and its readonly flag.
      - if the source file system is readonly then make the clone writable by the owner.
-     - some code reorganizations, e.g. unction setAttributes() has been moved to the main file.
+     - some code reorganizations, e.g. function setAttributes() has been moved to the main file.
 
 2013-08-12 22:33  rj - r43
 
@@ -42,7 +50,7 @@ Note: Milestones are embraced with ••••
 2013-08-12 22:20  rj - r42
 
    * clone.c
-     - NFS and other file systems don't have file creation dates, so desconsider st_birthtimespec in these cases.
+     - NFS and other file systems don't have file creation dates, so ignore st_birthtimespec in these cases.
 
 
 •••• 2013-06-27 -- Created a snapshot of r41 for release as v1.0.2, provided it for download at GC, and submitted it to FreeBSD ports ••••
