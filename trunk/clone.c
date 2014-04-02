@@ -2,7 +2,7 @@
 //  clone
 //
 //  Created by Dr. Rolf Jansen on 2013-01-13.
-//  Copyright (c) 2013. All rights reserved.
+//  Copyright (c) 2013-2014. All rights reserved.
 //
 //  Redistribution and use in source and binary forms, with or without modification,
 //  are permitted provided that the following conditions are met:
@@ -51,12 +51,14 @@
 #include "utils.h"
 
 
-static const char *version = "Version 1.0.4b (r"STRINGIFY(SVNREV)")";
+static const char *version = "Version 1.0.4 (r"STRINGIFY(SVNREV)")";
 
 // Source device and file system information
 dev_t  gSourceDev;
 char  *gSourceFSType;
 bool   gSourceRdOnly;
+int    gVerbosityLevel = 1;
+int    gErrorCount     = 0;
 
 // Mode Flags
 bool   gReadNoCache  = false;
@@ -299,6 +301,28 @@ void recycleFinishedQItem(QItem *qitem)
 }
 
 
+static inline void feedback(const char action, const char *path)
+{
+   switch (gVerbosityLevel)
+   {
+      case 0:
+         return;
+
+      default:
+      case 1:
+         putc(action, stdout);
+         fflush(stdout);
+         break;
+
+      case 2:
+      case 3:
+         printf("%c %s\n", action, path);
+         fflush(stdout);
+         break;
+   }
+}
+
+
 #pragma mark ••• Passing the Attributes •••
 
 void setAttributes(const char *src, const char *dst, struct stat *st)
@@ -363,6 +387,7 @@ void *reader(void *threadArg)
                chunk->rc    = SRC_ERROR;
                chunk->size  = 0;
                chunk->state = state = final;
+               gErrorCount++;
                strerror_r(abs(chunk->rc), errorString, errStrLen);
                printf("\nRead error on file %s: %s.\n", qitem->src, errorString);
             }
@@ -385,6 +410,7 @@ void *reader(void *threadArg)
       {
          // Most probably, the file has been deleted after it was scheduled for copying.
          // Drop a message, and tell the writer to skip this one.
+         gErrorCount++;
          strerror_r(errno, errorString, errStrLen);
          printf("\nFile %s could not be opened for reading: %s.\n", qitem->src, errorString);
 
@@ -460,6 +486,7 @@ void *writer(void *threadArg)
 
             else
             {
+               gErrorCount++;
                strerror_r(abs(rc = DST_ERROR), errorString, errStrLen);
                printf("\nWrite error on file %s: %s.\n", qitem->dst, errorString);
             }
@@ -505,6 +532,7 @@ void *writer(void *threadArg)
 
          else // (rc != NO_ERROR)
          {
+            gErrorCount++;
             strerror_r(abs(rc), errorString, errStrLen);
             printf("\nFile %s could not be copied to %s: %s.\n", qitem->src, qitem->dst, errorString);
          }
@@ -513,6 +541,7 @@ void *writer(void *threadArg)
       else // (out == -1)
       {
          // Drop a message, remove the file from the queue, and clean-up without further notice.
+         gErrorCount++;
          strerror_r(errno, errorString, errStrLen);
          printf("\nFile %s could not be opened for writing: %s.\n", qitem->dst, errorString);
 
@@ -767,9 +796,12 @@ int deleteDirEntity(char *path, size_t pl, long st_mode)
          else if (rmdir(path) != NO_ERROR)
          {
             rc = errno;
+            gErrorCount++;
             strerror_r(rc, errorString, errStrLen);
             printf("\nDirectory %s could not be deleted: %s.\n", path, errorString);
          }
+         else
+            feedback('-', path);
          break;
 
       case S_IFIFO:      // A named pipe or FIFO.
@@ -781,6 +813,7 @@ int deleteDirEntity(char *path, size_t pl, long st_mode)
          if (unlink(path) != NO_ERROR)
          {
             rc = errno;
+            gErrorCount++;
             strerror_r(rc, errorString, errStrLen);
             printf("\nFile %s could not be deleted: %s.\n", path, errorString);
          }
@@ -933,7 +966,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
             {
                removeFSName(syncEntities, sep->d_name, sep->d_namlen);
 
-               // This file system name is already present at the destination,
+               // This file system item is already present at the destination,
                // but is it really exactly the same file or entity?
                if (lstat(ndst, &dstat) == NO_ERROR       &&
                    dstat.st_uid        == sstat.st_uid   &&
@@ -952,18 +985,25 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                    )
                   )
                {
+                  // Yes, it is, so if it is not a directory then skip it!
                   if (!S_ISDIR(dstat.st_mode))
                   {
-                     // Yes, it is, so skip it!
+                     if (S_ISREG(sstat.st_mode) && sstat.st_nlink > 1)
+                     {
+                        Node *ino = findINode(gHLinkINodes, sstat.st_ino);
+                        if (!ino || ino->value.v.i != sstat.st_dev)
+                           storeINode(gHLinkINodes, sstat.st_ino, ndst, ndl, sstat.st_dev);
+                     }
+
                      free(ndst);
                      free(nsrc);
                      continue;
                   }
                }
 
-               // No, it has the same name, but it is somehow different.
-               // So, try to delete it from the destination before continuing.
                else if (deleteDirEntity(ndst, ndl, dstat.st_mode) == NO_ERROR)
+                  // No, it has the same name, but it is somehow different.
+                  // So, try to delete it from the destination before continuing.
                   dstat.st_ino = 0;
 
                else
@@ -985,20 +1025,25 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                   if ((dstat.st_ino != 0 || lstat(ndst, &dstat) == NO_ERROR) && S_ISDIR(dstat.st_mode) ||
                        dstat.st_ino == 0 && (dirCreated = (mkdir(ndst, modperms(sstat.st_mode)) == NO_ERROR)))
                   {
-                     putc('.', stdout); fflush(stdout);
+                     if (dirCreated)
+                     {
+                        gTotalItems++;
+                        feedback('+', ndst);
+                     }
+                     else
+                        feedback('=', ndst);
+
                      *(short *)&nsrc[nsl++] = *(short *)&ndst[ndl++] = *(short *)"/";
                      if (sstat.st_dev == gSourceDev)
                         clone(nsrc, nsl, ndst, ndl);
 
                      setAttributes(nsrc, ndst, &sstat);
-
-                     if (dirCreated)
-                        gTotalItems++;
                   }
 
                   else
                   {
                      rc = errno;
+                     gErrorCount++;
                      strerror_r(abs(rc), errorString, errStrLen);
                      printf("\nDestination directory %s could not be created: %s.\n", ndst, errorString);
                   }
@@ -1020,6 +1065,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                      {
                         if ((rc = fileEmpty(nsrc, ndst, &sstat)) != NO_ERROR)
                         {
+                           gErrorCount++;
                            strerror_r(abs(rc), errorString, errStrLen);
                            printf("\nCreating file %s in %s failed: %s.\n", sep->d_name, dst, errorString);
                         }
@@ -1028,6 +1074,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                   else
                      if ((rc = hlnkCopy(nsrc, ndst, ndl, &sstat)) != NO_ERROR)
                      {
+                        gErrorCount++;
                         strerror_r(abs(rc), errorString, errStrLen);
                         printf("\nCopying file or hard link %s from %s to %s failed: %s.\n", sep->d_name, src, dst, errorString);
                      }
@@ -1036,6 +1083,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                case S_IFLNK:      // A symbolic link.
                   if ((rc = slnkCopy(nsrc, ndst, &sstat)) != NO_ERROR)
                   {
+                     gErrorCount++;
                      strerror_r(abs(rc), errorString, errStrLen);
                      printf("\nCopying symbolic link %s from %s to %s failed: %s.\n", sep->d_name, src, dst, errorString);
                   }
@@ -1059,7 +1107,8 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                default:
                   ftype = "of unknown type";
                special:
-                  printf("\n%s is %s, and it is not copied.\n", nsrc, ftype);
+                  if (gVerbosityLevel > 0)
+                     printf("\n%s is %s, and it is not copied.\n", nsrc, ftype);
                   free(ndst);
                   free(nsrc);
                   break;
@@ -1146,9 +1195,9 @@ void usage(const char *executable)
    while (--r >= executable && *r != '/')
       ;
    r++;
-   printf("File tree cloning by Dr. Rolf Jansen (c) 2013 - %s\n\n", version);
+   printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2014 - %s\n\n", version);
    printf("\
-Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-x exclude-list] [-X excl-list-file] [-y] [-h|-?|?] source/ destination/\n\n\
+Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-v level] [-x exclude-list] [-X excl-list-file] [-y] [-h|-?|?] source/ destination/\n\n\
        -c roff|woff|rwoff  Selectively turn off the file system cache for reading or writing\n\
                            or for reading and writing -- the caches are on by default.\n\n\
        The options -d, -i, -s are mutually exclusive:\n\
@@ -1157,6 +1206,10 @@ Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-x exclude-list] [-X excl-list-file] 
        -i                  Incrementally add new content to or change content in the destination,\n\
                            but do not touch content in destination that does not exist in source.\n\n\
        -s                  Completely synchronize destination with source.\n\n\
+       -v level            Verbosity level (default = 1):\n\
+                           0 - no output\n\
+                           1 - show directory action: add (+), delete (-), keep (=)\n\
+                           2 - show processed directories\n\n\
        -x exclude-list     Colon separated list of entity names or full path names to be\n\
                            excluded from cloning. Use full path names to single out exactly\n\
                            one item. Use entity names, if all existing entities having that name\n\
@@ -1173,14 +1226,14 @@ Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-x exclude-list] [-X excl-list-file] 
 
 int main(int argc, char *const argv[])
 {
-   int    optchr;
+   int    optchr, vLevel;
    size_t homelen = 0;
    char   ch, *o, *p, *q, *usrhome, *cmd = argv[0];
    bool   d_flag = false, i_flag = false, s_flag = false, y_flag = false;
    FILE  *exclf;
    struct stat exclst;
 
-   while ((optchr = getopt(argc, argv, "c:disx:X:yh?")) != -1)
+   while ((optchr = getopt(argc, argv, "c:disv:x:X:yh?")) != -1)
       switch (optchr)
       {
          case 'c':   // selectively turn off the file system cache for reading or writing or for reading and writing
@@ -1213,6 +1266,14 @@ int main(int argc, char *const argv[])
                goto arg_err;
             else
                s_flag = gSynchronize = true;
+            break;
+
+         case 'v':   // verbosity level
+            vLevel = atoi(optarg);
+            if (0 <= vLevel && vLevel <= 2)
+               gVerbosityLevel = vLevel;
+            else
+               goto arg_err;
             break;
 
          case 'x':   // colon separated list of entity names or full path names to be excluded from cloning
@@ -1377,8 +1438,6 @@ int main(int argc, char *const argv[])
       gSourceRdOnly = sfs.f_flags & MNT_RDONLY;
 
       gHLinkINodes = createTable(8192);
-      if (dirCreated)
-         gTotalItems++;
 
       // Initialze the dispensers
       for (i = 0; i < maxChunkCount; i++)
@@ -1403,9 +1462,17 @@ int main(int argc, char *const argv[])
          return 1;
       }
 
-      printf("File tree cloning by Dr. Rolf Jansen (c) 2013 - %s\nclone %s %s\n", version, src, dst);
+      if (gVerbosityLevel)
+         printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2014 - %s\nclone %s %s\n", version, src, dst);
 
-      putc('.', stdout); fflush(stdout);
+      if (dirCreated)
+      {
+         gTotalItems++;
+         feedback('+', dst);
+      }
+      else
+         feedback('=', dst);
+
       clone(src, sl, dst, dl);
       setAttributes(src, dst, &sstat);
 
@@ -1415,19 +1482,37 @@ int main(int argc, char *const argv[])
       releaseTable(gHLinkINodes);
       releaseTable(gExcludeList);
 
-      if (gTotalItems)
+      if (gVerbosityLevel)
       {
-         gettimeofday(&t1, NULL);
-         double t = t1.tv_sec - t0.tv_sec + (t1.tv_usec - t0.tv_usec)/1.0e6;
-         gTotalSize /= 1048576.0;
-         printf("\n%llu items copied, %.1f MB in %.2f s -- %.1f MB/s\n\n", gTotalItems, gTotalSize, t, gTotalSize/t);
+         if (gTotalItems)
+         {
+            gettimeofday(&t1, NULL);
+            double t = t1.tv_sec - t0.tv_sec + (t1.tv_usec - t0.tv_usec)/1.0e6;
+            gTotalSize /= 1048576.0;
+               printf("\n%llu items copied, %.1f MB in %.2f s -- %.1f MB/s\n", gTotalItems, gTotalSize, t, gTotalSize/t);
+         }
+
+         else
+            printf("\nNo items copied.\n");
+
+         switch (gErrorCount)
+         {
+            case 0:
+               printf("No errors occured.\n");
+               break;
+
+            case 1:
+               printf("One error occured.\n");
+               break;
+
+            default:
+               printf("%d errors occured.\n", gErrorCount);
+               break;
+         }
       }
 
-      else
-         printf("\nNo items copied.\n");
-
-      return 0;
+      return gErrorCount;
    }
 
-   return 1;
+   return -1;
 }
