@@ -6,6 +6,20 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
+•••• 2014-04-02 -- Created a snapshot of r49 for release as v1.0.4, stored it on Google Drive and submitted it to FreeBSD Ports ••••
+
+
+2014-04-02 11:00  rj - r49
+
+   * clone.c, clone.1
+     - implemented different verbosity levels.
+     - changed feedback for directory processing, instead of '.' for every kind of processing,
+       show '+' for directory creation, '-' for directory deletion, and '=' for no change.
+     - count the total number of errors and return it to the shell.
+     - in sync mode, if a file is ignored that is hard linked, then its inode needs to be registered in the global hard link store.
+     - bumped copyright period - for now 2013-2014.
+     - release of version 1.0.4 (r49).
+
 2013-11-12 18:32  rj - r48
 
    * clone.c, ChangeLog
