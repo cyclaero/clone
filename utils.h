@@ -2,7 +2,7 @@
 //  clone
 //
 //  Created by Dr. Rolf Jansen on 2013-01-13.
-//  Copyright (c) 2013. All rights reserved.
+//  Copyright (c) 2013-2014. All rights reserved.
 //
 //  Redistribution and use in source and binary forms, with or without modification,
 //  are permitted provided that the following conditions are met:
@@ -138,7 +138,7 @@ typedef struct Node
 // CAUTION: It is an error to call these functions with key being 0 AND name being NULL.
 //          Either of both must be non-zero. No error cheking is done within these recursive functions.
 Node *findTreeNode(ulong key, const char *name, Node  *node);
-int    addTreeNode(ulong key, const char *name, size_t namlen, Value *value, Node **node, Node **passed);
+int    addTreeNode(ulong key, const char *name, ssize_t namlen, Value *value, Node **node, Node **passed);
 int removeTreeNode(ulong key, const char *name, Node **node);
 void   releaseTree(Node *node);
 
@@ -149,9 +149,9 @@ Node **createTable(uint n);
 void  releaseTable(Node *table[]);
 
 Node    *findINode(Node *table[], ulong key);
-Node   *storeINode(Node *table[], ulong key, const char *fsname, size_t namlen, long dev);
+Node   *storeINode(Node *table[], ulong key, const char *fsname, ssize_t namlen, long dev);
 void   removeINode(Node *table[], ulong key);
 
-Node   *findFSName(Node *table[], const char *fsname, size_t namlen);
-Node  *storeFSName(Node *table[], const char *fsname, size_t namlen, Value *value);
-void  removeFSName(Node *table[], const char *fsname, size_t namlen);
+Node   *findFSName(Node *table[], const char *fsname, ssize_t namlen);
+Node  *storeFSName(Node *table[], const char *fsname, ssize_t namlen, Value *value);
+void  removeFSName(Node *table[], const char *fsname, ssize_t namlen);
