@@ -6,6 +6,15 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
+2014-07-12 18:15 rj - r50
+
+   * clone.c, utils.h, utils.c
+     - in case of FreeBSD transfer only non-trivial ACLs in getMetaData().
+     - fix some static analyzer warnings in the key-name/value store.
+     - some formatting.
+     - set version to 1.0.5b.
+
+
 •••• 2014-04-02 -- Created a snapshot of r49 for release as v1.0.4, stored it on Google Drive and submitted it to FreeBSD Ports ••••
 
 

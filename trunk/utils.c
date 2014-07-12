@@ -2,7 +2,7 @@
 //  clone
 //
 //  Created by Dr. Rolf Jansen on 2013-01-13.
-//  Copyright (c) 2013. All rights reserved.
+//  Copyright (c) 2013-2014. All rights reserved.
 //
 //  Redistribution and use in source and binary forms, with or without modification,
 //  are permitted provided that the following conditions are met:
@@ -230,9 +230,28 @@
       }
 
       // reading the ACLs
-      xmd->acl[0] = acl_get_link_np(src, ACL_TYPE_ACCESS);
-      xmd->acl[1] = acl_get_link_np(src, ACL_TYPE_DEFAULT);
-      xmd->acl[2] = acl_get_link_np(src, ACL_TYPE_NFS4);
+      int trivial;
+
+      if ((xmd->acl[0] = acl_get_link_np(src, ACL_TYPE_ACCESS)) &&
+          (acl_is_trivial_np(xmd->acl[0], &trivial) || trivial))
+      {
+         free(xmd->acl[0]);
+         xmd->acl[0] = NULL;
+      }
+
+      if ((xmd->acl[1] = acl_get_link_np(src, ACL_TYPE_DEFAULT)) &&
+          (acl_is_trivial_np(xmd->acl[1], &trivial) || trivial))
+      {
+         free(xmd->acl[1]);
+         xmd->acl[1] = NULL;
+      }
+
+      if ((xmd->acl[2] = acl_get_link_np(src, ACL_TYPE_NFS4)) &&
+          (acl_is_trivial_np(xmd->acl[2], &trivial) || trivial))
+      {
+         free(xmd->acl[2]);
+         xmd->acl[2] = NULL;
+      }
    }
 
    void setMetaData(const char *dst, ExtMetaData *xmd)
@@ -342,56 +361,56 @@ static int balanceNode(Node **node)
 
    if (o->B == -2)
    {
-      p = o->L;                     // checked for !o->L in RemoveCalcNode()
-      if (p->B == +1)               // so p would never be a NULL pointer
-      {
-         change = 1;                // double left-right rotation
-         q      = p->R;             // left rotation
-         p->R   = q->L;
-         q->L   = p;
-         o->L   = q->R;             // right rotation
-         q->R   = o;
-         o->B   = +(q->B < 0);
-         p->B   = -(q->B > 0);
-         q->B   = 0;
-         *node  = q;
-      }
+      if (p = o->L)                    // make the static analyzer happy
+         if (p->B == +1)
+         {
+            change = 1;                // double left-right rotation
+            q      = p->R;             // left rotation
+            p->R   = q->L;
+            q->L   = p;
+            o->L   = q->R;             // right rotation
+            q->R   = o;
+            o->B   = +(q->B < 0);
+            p->B   = -(q->B > 0);
+            q->B   = 0;
+            *node  = q;
+         }
 
-      else
-      {
-         change = p->B;             // single right rotation
-         o->L   = p->R;
-         p->R   = o;
-         o->B   = -(++p->B);
-         *node  = p;
-      }
+         else
+         {
+            change = p->B;             // single right rotation
+            o->L   = p->R;
+            p->R   = o;
+            o->B   = -(++p->B);
+            *node  = p;
+         }
    }
 
    else if (o->B == +2)
    {
-      q = o->R;                     // checked for !o->R in RemoveCalcNode()
-      if (q->B == -1)               // so q would never be a NULL pointer
-      {
-         change = 1;                // double right-left rotation
-         p      = q->L;             // right rotation
-         q->L   = p->R;
-         p->R   = q;
-         o->R   = p->L;             // left rotation
-         p->L   = o;
-         o->B   = -(p->B > 0);
-         q->B   = +(p->B < 0);
-         p->B   = 0;
-         *node  = p;
-      }
+      if (q = o->R)                    // make the static analyzer happy
+         if (q->B == -1)
+         {
+            change = 1;                // double right-left rotation
+            p      = q->L;             // right rotation
+            q->L   = p->R;
+            p->R   = q;
+            o->R   = p->L;             // left rotation
+            p->L   = o;
+            o->B   = -(p->B > 0);
+            q->B   = +(p->B < 0);
+            p->B   = 0;
+            *node  = p;
+         }
 
-      else
-      {
-         change = q->B;             // single left rotation
-         o->R   = q->L;
-         q->L   = o;
-         o->B   = -(--q->B);
-         *node  = q;
-      }
+         else
+         {
+            change = q->B;             // single left rotation
+            o->R   = q->L;
+            q->L   = o;
+            o->B   = -(--q->B);
+            *node  = q;
+         }
    }
 
    return change != 0;
@@ -502,7 +521,7 @@ Node *findTreeNode(ulong key, const char *name, Node *node)
       return NULL;
 }
 
-int addTreeNode(ulong key, const char *name, size_t namlen, Value *value, Node **node, Node **passed)
+int addTreeNode(ulong key, const char *name, ssize_t namlen, Value *value, Node **node, Node **passed)
 {
    Node *o = *node;
 
@@ -661,14 +680,14 @@ void releaseTree(Node *node)
 //
 // Many thanks to Austin!
 
-static inline uint mmh3(const char *name, size_t namlen)
+static inline uint mmh3(const char *name, ssize_t namlen)
 {
-   size_t n = namlen/4;
-   uint   k1, h1 = (uint)namlen;    // quite tiny (0.2 %) better distribution by seeding the name length
-   uint  *quads = (uint *)(name + n*4);
-   uchar *tail = (uchar *)quads;
+   int    i, n   = (int)(namlen/4);
+   uint   k1, h1 = (uint)namlen;          // quite tiny (0.2 %) better distribution by seeding the name length
+   uint  *quads  = (uint *)(name + n*4);
+   uchar *tail   = (uchar *)quads;
 
-   for (int i = -(int)n; i; i++)
+   for (i = -n; i; i++)
    {
       k1  = quads[i];
       k1 *= 0xCC9E2D51;
@@ -751,13 +770,20 @@ Node *findINode(Node *table[], ulong key)
    return findTreeNode(key, NULL, table[key%n + 1]);
 }
 
-Node *storeINode(Node *table[], ulong key, const char *fsname, size_t namlen, long dev)
+Node *storeINode(Node *table[], ulong key, const char *fsname, ssize_t namlen, long dev)
 {
-   uint  n = *(uint *)table;
-   Value value = {Simple, {.i = dev}};
-   Node *passed;
-   addTreeNode(key, fsname, namlen, &value, &table[key%n + 1], &passed);
-   return passed;
+   if (fsname && *fsname)
+   {
+      if (namlen < 0)
+         namlen = strlen(fsname);
+      uint  n = *(uint *)table;
+      Value value = {Simple, {.i = dev}};
+      Node *passed;
+      addTreeNode(key, fsname, namlen, &value, &table[key%n + 1], &passed);
+      return passed;
+   }
+   else
+      return NULL;
 }
 
 void removeINode(Node *table[], ulong key)
@@ -777,10 +803,12 @@ void removeINode(Node *table[], ulong key)
 
 
 // Storing/retrieving file system names
-Node *findFSName(Node *table[], const char *fsname, size_t namlen)
+Node *findFSName(Node *table[], const char *fsname, ssize_t namlen)
 {
    if (fsname && *fsname)
    {
+      if (namlen < 0)
+         namlen = strlen(fsname);
       uint  n = *(uint *)table;
       ulong hkey = mmh3(fsname, namlen);
       return findTreeNode(hkey, fsname, table[hkey%n + 1]);
@@ -789,10 +817,12 @@ Node *findFSName(Node *table[], const char *fsname, size_t namlen)
       return NULL;
 }
 
-Node *storeFSName(Node *table[], const char *fsname, size_t namlen, Value *value)
+Node *storeFSName(Node *table[], const char *fsname, ssize_t namlen, Value *value)
 {
    if (fsname && *fsname)
    {
+      if (namlen < 0)
+         namlen = strlen(fsname);
       uint  n = *(uint *)table;
       ulong hkey = mmh3(fsname, namlen);
       Node *passed;
@@ -803,10 +833,12 @@ Node *storeFSName(Node *table[], const char *fsname, size_t namlen, Value *value
       return NULL;
 }
 
-void removeFSName(Node *table[], const char *fsname, size_t namlen)
+void removeFSName(Node *table[], const char *fsname, ssize_t namlen)
 {
    if (fsname && *fsname)
    {
+      if (namlen < 0)
+         namlen = strlen(fsname);
       ulong hkey = mmh3(fsname, namlen);
       uint  tidx = hkey % *(uint *)table + 1;
       Node *node = table[tidx];

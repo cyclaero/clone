@@ -51,7 +51,7 @@
 #include "utils.h"
 
 
-static const char *version = "Version 1.0.4 (r"STRINGIFY(SVNREV)")";
+static const char *version = "Version 1.0.5b (r"STRINGIFY(SVNREV)")";
 
 // Source device and file system information
 dev_t  gSourceDev;
@@ -61,25 +61,25 @@ int    gVerbosityLevel = 1;
 int    gErrorCount     = 0;
 
 // Mode Flags
-bool   gReadNoCache  = false;
-bool   gWriteNoCache = false;
-bool   gIncremental  = false;
-bool   gSynchronize  = false;
+bool   gReadNoCache    = false;
+bool   gWriteNoCache   = false;
+bool   gIncremental    = false;
+bool   gSynchronize    = false;
 
-llong  gWriterLast   = 0;
-llong  gTotalItems   = 0;
-double gTotalSize    = 0.0;
+llong  gWriterLast     = 0;
+llong  gTotalItems     = 0;
+double gTotalSize      = 0.0;
 
-Node **gHLinkINodes  = NULL;
-Node **gExcludeList  = NULL;
+Node **gHLinkINodes    = NULL;
+Node **gExcludeList    = NULL;
 
 // Thread synchronization
-bool   gRunning      = true;
-bool   gQItemWait    = false;
-bool   gChunkWait    = false;
-bool   gReaderWait   = false;
-bool   gWriterWait   = false;
-bool   gLevelWait    = false;
+bool   gRunning        = true;
+bool   gQItemWait      = false;
+bool   gChunkWait      = false;
+bool   gReaderWait     = false;
+bool   gWriterWait     = false;
+bool   gLevelWait      = false;
 
 pthread_t       reader_thread;
 pthread_t       writer_thread;
@@ -350,7 +350,7 @@ void *reader(void *threadArg)
       QItem *qitem;
 
       pthread_mutex_lock(&reader_mutex);
-      while ((qitem = informReadingQItem()) == NULL)  // wait for new items that are ready for reading
+      while (!(qitem = informReadingQItem()))         // wait for new items that are ready for reading
       {
          gReaderWait = true;
          pthread_cond_wait(&reader_cond, &reader_mutex);
@@ -363,7 +363,8 @@ void *reader(void *threadArg)
       int in = open(qitem->src, O_RDONLY);
       if (in != -1)
       {
-         if (gReadNoCache) fnocache(in);
+         if (gReadNoCache)
+            fnocache(in);
 
          int        state;
          size_t     size;
@@ -436,7 +437,7 @@ void *writer(void *threadArg)
       llong  fid;
 
       pthread_mutex_lock(&writer_mutex);
-      while ((qitem = informWritingQItem()) == NULL)  // wait for items that are ready for writing
+      while (!(qitem = informWritingQItem()))         // wait for items that are ready for writing
       {
          gWriterWait = true;
          pthread_cond_wait(&writer_cond, &writer_mutex);
@@ -455,7 +456,8 @@ void *writer(void *threadArg)
       int out = open(qitem->dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, modperms(qitem->st.st_mode));
       if (out != -1)
       {
-         if (gWriteNoCache) fnocache(out);
+         if (gWriteNoCache)
+            fnocache(out);
 
          int    state, rc = NO_ERROR;
          size_t fsize = 0;
@@ -610,8 +612,10 @@ int atomCopy(char *src, char *dst, struct stat *st)
    if ((in = open(src, O_RDONLY)) != -1)
       if ((out = open(dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, modperms(st->st_mode))) != -1)
       {
-         if (gReadNoCache)  fnocache(in);
-         if (gWriteNoCache) fnocache(out);
+         if (gReadNoCache)
+            fnocache(in);
+         if (gWriteNoCache)
+            fnocache(out);
 
          int    rc = NO_ERROR;
          size_t size, filesize = 0;
@@ -1489,7 +1493,7 @@ int main(int argc, char *const argv[])
             gettimeofday(&t1, NULL);
             double t = t1.tv_sec - t0.tv_sec + (t1.tv_usec - t0.tv_usec)/1.0e6;
             gTotalSize /= 1048576.0;
-               printf("\n%llu items copied, %.1f MB in %.2f s -- %.1f MB/s\n", gTotalItems, gTotalSize, t, gTotalSize/t);
+            printf("\n%llu items copied, %.1f MB in %.2f s -- %.1f MB/s\n", gTotalItems, gTotalSize, t, gTotalSize/t);
          }
 
          else
