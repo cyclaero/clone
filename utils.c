@@ -235,21 +235,21 @@
       if ((xmd->acl[0] = acl_get_link_np(src, ACL_TYPE_ACCESS)) &&
           (acl_is_trivial_np(xmd->acl[0], &trivial) || trivial))
       {
-         free(xmd->acl[0]);
+         acl_free(xmd->acl[0]);
          xmd->acl[0] = NULL;
       }
 
       if ((xmd->acl[1] = acl_get_link_np(src, ACL_TYPE_DEFAULT)) &&
           (acl_is_trivial_np(xmd->acl[1], &trivial) || trivial))
       {
-         free(xmd->acl[1]);
+         acl_free(xmd->acl[1]);
          xmd->acl[1] = NULL;
       }
 
       if ((xmd->acl[2] = acl_get_link_np(src, ACL_TYPE_NFS4)) &&
           (acl_is_trivial_np(xmd->acl[2], &trivial) || trivial))
       {
-         free(xmd->acl[2]);
+         acl_free(xmd->acl[2]);
          xmd->acl[2] = NULL;
       }
    }

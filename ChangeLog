@@ -6,7 +6,12 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
-2014-07-12 18:15 rj - r50
+2014-07-12 20:00  rj - r51
+
+   * utils.c
+     - ACLs ought to be freed using acl_free() instead of free().
+
+2014-07-12 18:15  rj - r50
 
    * clone.c, utils.h, utils.c
      - in case of FreeBSD transfer only non-trivial ACLs in getMetaData().
