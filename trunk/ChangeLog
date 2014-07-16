@@ -6,6 +6,12 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
+2014-07-16 10:58  rj - r53
+
+   * clone.c, clone.1
+     - added verbosity level 2 for indicating cloned files by a '.'.
+     - now level 3 displays the names of all cloned file system items.
+
 2014-07-15 21:51  rj - r52
 
    * clone.c, utils.h, utils.c

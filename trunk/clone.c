@@ -312,11 +312,11 @@ static inline void feedback(const char action, const char *path)
 
       default:
       case 1:
+      case 2:
          putc(action, stdout);
          fflush(stdout);
          break;
 
-      case 2:
       case 3:
          printf("%c %s\n", action, path);
          fflush(stdout);
@@ -342,6 +342,9 @@ void setAttributes(int sfd, int dfd, const char *src, const char *dst, struct st
    lchown(dst, st->st_uid, st->st_gid);
    lchmod(dst, modperms(st->st_mode));
    setTimesFlags(dst, st);
+
+   if (gVerbosityLevel >= 2 && !S_ISDIR(st->st_mode))
+      feedback('.', dst);
 }
 
 
@@ -1227,8 +1230,9 @@ Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-v level] [-x exclude-list] [-X excl-
        -s                  Completely synchronize destination with source.\n\n\
        -v level            Verbosity level (default = 1):\n\
                            0 - no output\n\
-                           1 - show directory action: add (+), delete (-), keep (=)\n\
-                           2 - show processed directories\n\n\
+                           1 - show directory action: '+' for add, '-' for delete, '=' for keep\n\
+                           2 - indicate cloned files by '.'\n\
+                           3 - display the path names of cloned file system items\n\n\
        -x exclude-list     Colon separated list of entity names or full path names to be\n\
                            excluded from cloning. Use full path names to single out exactly\n\
                            one item. Use entity names, if all existing entities having that name\n\
@@ -1289,7 +1293,7 @@ int main(int argc, char *const argv[])
 
          case 'v':   // verbosity level
             vLevel = atoi(optarg);
-            if (0 <= vLevel && vLevel <= 2)
+            if (0 <= vLevel && vLevel <= 3)
                gVerbosityLevel = vLevel;
             else
                goto arg_err;
@@ -1412,6 +1416,9 @@ int main(int argc, char *const argv[])
    if (dst[dl-1] != '/')
       *(short *)&dst[dl++] = *(short *)"/";
 
+   if (gVerbosityLevel)
+      printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2014 - %s\nclone %s %s\n", version, src, dst);
+
    // 2. check whether the paths do exist, lead to directories, and make sure that destination is not inherited by source
    bool   dirCreated = false;
    int    rc;
@@ -1484,9 +1491,6 @@ int main(int argc, char *const argv[])
          printf("Cannot create file writer thread: %s.",  strerror(rc));
          return 1;
       }
-
-      if (gVerbosityLevel)
-         printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2014 - %s\nclone %s %s\n", version, src, dst);
 
       if (dirCreated)
       {
