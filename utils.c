@@ -41,6 +41,10 @@
 
 #pragma mark ••• Setting Times/Flags and Copying Extended Meta Data - EXAs & ACLs •••
 
+extern int *gSourceFSType;
+extern int *gDestinFSType;
+
+
 #if defined (__APPLE__)
 
    #include <sys/xattr.h>
@@ -61,16 +65,19 @@
       lutimes(dst, tv);
    }
 
-   void getMetaData(const char *src, ExtMetaData *xmd)
+   void getMetaData(int fd, const char *src, struct stat *st, ExtMetaData *xmd)
    {
-      // reading extended attributes
+      // Reading extended attributes
       exa_t   xa0 = NULL, *xan = &xa0, xa;
-      ssize_t listsize = listxattr(src, NULL, 0, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION);
-
+      ssize_t listsize = (fd != -1) ? flistxattr(fd, NULL, 0, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION)
+                                    : listxattr(src, NULL, 0, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION);
       if (listsize > 0)
       {
          char   *namelist = malloc(listsize);
-                            listxattr(src, namelist, listsize, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION);
+         if (fd != -1)
+            flistxattr(fd, namelist, listsize, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION);
+         else
+            listxattr(src, namelist, listsize, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION);
 
          char   *name = namelist;
          char   *value;
@@ -78,10 +85,16 @@
 
          do
          {
-            if ((size = getxattr(src, name, NULL, 0, 0, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION)) > 0)
-               getxattr(src, name, value = malloc(size), size, 0, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION);
+            if (fd != -1)
+               if ((size = fgetxattr(fd, name, NULL, 0, 0, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION)) > 0)
+                  fgetxattr(fd, name, value = malloc(size), size, 0, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION);
+               else
+                  value = NULL;
             else
-               value = NULL;
+               if ((size = getxattr(src, name, NULL, 0, 0, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION)) > 0)
+                  getxattr(src, name, value = malloc(size), size, 0, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION);
+               else
+                  value = NULL;
 
             xa = *xan = malloc(sizeof(ExtAttrs));
             xa->name  = name;
@@ -94,24 +107,26 @@
             name += len;
          } while (listsize -= len);
       }
+      xmd->exa = xa0;
 
-      xmd->exa[0] = xa0;
-
-      // reading the ACLs
-      xmd->acl[0] = acl_get_link_np(src, ACL_TYPE_EXTENDED);
+      // Reading the ACLs
+      xmd->acl = (fd != -1) ? acl_get_fd_np(fd, ACL_TYPE_EXTENDED) : acl_get_link_np(src, ACL_TYPE_EXTENDED);
    }
 
-   void setMetaData(const char *dst, ExtMetaData *xmd)
+   void setMetaData(int fd, const char *dst, ExtMetaData *xmd)
    {
-      // writing the EXAs
-      if (xmd->exa[0])
+      // Writing the EXAs
+      if (xmd->exa)
       {
-         exa_t xa = xmd->exa[0];
+         exa_t xa = xmd->exa;
          char *namelist = xa->name;
 
          while (xa)
          {
-            setxattr(dst, xa->name, xa->value, xa->size, 0, XATTR_NOFOLLOW);
+            if (fd != -1)
+               fsetxattr(fd, xa->name, xa->value, xa->size, 0, XATTR_NOFOLLOW);
+            else
+               setxattr(dst, xa->name, xa->value, xa->size, 0, XATTR_NOFOLLOW);
             free(xa->value);
             void *fxa = xa;
             xa = xa->next;
@@ -120,20 +135,23 @@
          free(namelist);
       }
 
-      // writing the ACLs
-      if (xmd->acl[0])
+      // Writing the ACLs
+      if (xmd->acl)
       {
-         acl_set_link_np(dst, ACL_TYPE_EXTENDED, xmd->acl[0]);
-         acl_free(xmd->acl[0]);
+         if (fd != -1)
+            acl_set_fd_np(fd, xmd->acl, ACL_TYPE_EXTENDED);
+         else
+            acl_set_link_np(dst, ACL_TYPE_EXTENDED, xmd->acl);
+         acl_free(xmd->acl);
       }
    }
 
    void freeMetaData(ExtMetaData *xmd)
    {
-      // releasing the EXAs
-      if (xmd->exa[0])
+      // Releasing the EXAs
+      if (xmd->exa)
       {
-         exa_t xa = xmd->exa[0];
+         exa_t xa = xmd->exa;
          char *namelist = xa->name;
 
          while (xa)
@@ -146,9 +164,9 @@
          free(namelist);
       }
 
-      // releasing the ACLs
-      if (xmd->acl[0])
-         acl_free(xmd->acl[0]);
+      // Releasing the ACLs
+      if (xmd->acl)
+         acl_free(xmd->acl);
    }
 
 #elif defined (__FreeBSD__)
@@ -157,7 +175,7 @@
 
    void setTimesFlags(const char *dst, struct stat *st)
    {
-      // from man 2 utimes (FreeBSD 9.1):
+      // From man 2 utimes (FreeBSD 9.1):
       /* If times is non-NULL, it is assumed to point to an array of two timeval
          structures.  The access time is set to the value of the first element,
          and the modification time is set to the value of the second element.  For
@@ -184,20 +202,23 @@
       lchflags(dst, st->st_flags);
    }
 
-   void getMetaData(const char *src, ExtMetaData *xmd)
+   void getMetaData(int fd, const char *src, struct stat *st, ExtMetaData *xmd)
    {
-      // reading the EXAs
+      // Reading the EXAs
       // FreeBSD got two name spaces for extended attributes
       // here we define system = 0 and user = 1)
       for (int i = 0; i < 2; i++)
       {
          int     ans = (i == 0) ? EXTATTR_NAMESPACE_SYSTEM : EXTATTR_NAMESPACE_USER;
          exa_t   xa0 = NULL, *xan = &xa0, xa;
-         ssize_t listsize = extattr_list_link(src, ans, NULL, 0);
-         if (listsize > 0)
-         {                     // FIXME: occasionally, something is writing beyond the supplied memory buffer - for the time being supply sufficient space
-            char   *namelist = malloc(listsize = MAX(listsize*10, 65536)); // the extracted list is not nul terminated, so leave space for the extra nul
-                    listsize = extattr_list_link(src, ans, namelist, listsize);
+         ssize_t listsize = ((fd != -1) ? extattr_list_fd(fd, ans, NULL, 0)
+                                        : extattr_list_link(src, ans, NULL, 0)) + 1; // the extracted list is not nul terminated, so leave space for the extra nul
+         if (listsize > 1)
+         {
+            // FIXME: occasionally, something in the system is writing beyond the supplied memory buffer.
+            //        for the time being supply quite a lot space, 10times the indicated seems to work.
+            char   *namelist = malloc(listsize *= 10);
+            listsize = extattr_list_link(src, ans, namelist, listsize);
 
             // the name list is actually a sequence of joined pascal strings -> unsigned char
             uchar  *name = (uchar *)namelist;
@@ -210,10 +231,16 @@
             {
                l0 = l1, l1 = name[l0], name[l0] = '\0';
 
-               if ((size = extattr_get_link(src, ans, (char *)name, NULL, 0)) > 0)
-                  extattr_get_link(src, ans, (char *)name, value = malloc(size), size);
+               if (fd != -1)
+                  if ((size = extattr_get_fd(fd, ans, (char *)name, NULL, 0)) > 0)
+                     extattr_get_fd(fd, ans, (char *)name, value = malloc(size), size);
+                  else
+                     value = NULL;
                else
-                  value = NULL;
+                  if ((size = extattr_get_link(src, ans, (char *)name, NULL, 0)) > 0)
+                     extattr_get_link(src, ans, (char *)name, value = malloc(size), size);
+                  else
+                     value = NULL;
 
                xa = *xan = malloc(sizeof(ExtAttrs));
                xa->name  = (char *)name;
@@ -229,34 +256,72 @@
          xmd->exa[i] = xa0;
       }
 
-      // reading the ACLs
-      int trivial;
-
-      if ((xmd->acl[0] = acl_get_link_np(src, ACL_TYPE_ACCESS)) &&
-          (acl_is_trivial_np(xmd->acl[0], &trivial) || trivial))
+      // Reading the ACLs
+      if (*gSourceFSType == *(int *)"ufs" && *gDestinFSType == *(int *)"ufs")
+         // In the case of UFS2 file systems, the ACLs have been read already
+         // as part of the extended attributes within the system namespace,
+         // and therefore it is not necessary to read them again.
+         xmd->acl[0] = xmd->acl[1] = NULL;
+      else
       {
-         acl_free(xmd->acl[0]);
-         xmd->acl[0] = NULL;
-      }
+         acl_t acl;
+         int trivial;
 
-      if ((xmd->acl[1] = acl_get_link_np(src, ACL_TYPE_DEFAULT)) &&
-          (acl_is_trivial_np(xmd->acl[1], &trivial) || trivial))
-      {
-         acl_free(xmd->acl[1]);
-         xmd->acl[1] = NULL;
-      }
+         if (fd != -1)
+         {
+            switch (fpathconf(fd, _PC_ACL_NFS4))
+            {
+               case 0:
+                  acl = acl_get_fd_np(fd, ACL_TYPE_ACCESS);
+                  break;
 
-      if ((xmd->acl[2] = acl_get_link_np(src, ACL_TYPE_NFS4)) &&
-          (acl_is_trivial_np(xmd->acl[2], &trivial) || trivial))
-      {
-         acl_free(xmd->acl[2]);
-         xmd->acl[2] = NULL;
+               case 1:
+                  acl = acl_get_fd_np(fd, ACL_TYPE_NFS4);
+                  break;
+
+               default:
+                  acl = NULL;
+                  break;
+            }
+
+            if (acl && (acl_is_trivial_np(acl, &trivial) || trivial))
+            {
+               acl_free(acl);
+               acl = NULL;
+            }
+            xmd->acl[0] = acl;
+            xmd->acl[1] = NULL;
+         }
+
+         else // no open file discriptor
+         {
+            if ((acl = acl_get_link_np(src, ACL_TYPE_ACCESS)) &&
+                (acl_is_trivial_np(acl, &trivial) || trivial))
+            {
+               acl_free(acl);
+               acl = NULL;
+            }
+            xmd->acl[0] = acl;
+
+            if (!S_ISDIR(st->st_mode))
+               xmd->acl[1] = NULL;
+            else
+            {
+               if ((acl = acl_get_link_np(src, ACL_TYPE_DEFAULT)) &&
+                   ((uint*)acl)[1] == 0)
+               {
+                  acl_free(acl);
+                  acl = NULL;
+               }
+               xmd->acl[1] = acl;
+            }
+         }
       }
    }
 
-   void setMetaData(const char *dst, ExtMetaData *xmd)
+   void setMetaData(int fd, const char *dst, ExtMetaData *xmd)
    {
-      // writing the EXAs
+      // Writing the EXAs
       // FreeBSD got two name spaces for extended attributes
       // here we define system = 0 and user = 1)
       for (int i = 0; i < 2; i++)
@@ -268,7 +333,10 @@
 
             while (xa)
             {
-               extattr_set_link(dst, ans, xa->name, xa->value, xa->size);
+               if (fd != -1)
+                  extattr_set_fd(fd, ans, xa->name, xa->value, xa->size);
+               else
+                  extattr_set_link(dst, ans, xa->name, xa->value, xa->size);
                free(xa->value);
                void *fxa = xa;
                xa = xa->next;
@@ -277,28 +345,26 @@
             free(namelist);
          }
 
-      // writing the ACLs
+      // Writing the ACLs
       if (xmd->acl[0])
       {
-         acl_set_link_np(dst, ACL_TYPE_ACCESS, xmd->acl[0]);
+         if (fd != -1)
+            acl_set_fd_np(fd, xmd->acl[0], ACL_TYPE_ACCESS);
+         else
+            acl_set_link_np(dst, ACL_TYPE_ACCESS, xmd->acl[0]);
          acl_free(xmd->acl[0]);
       }
 
       if (xmd->acl[1])
-      {
+      {  // only directories (no open fd) may have default ACLs
          acl_set_link_np(dst, ACL_TYPE_DEFAULT, xmd->acl[1]);
          acl_free(xmd->acl[1]);
-      }
-
-      if (xmd->acl[2])
-      {
-         acl_set_link_np(dst, ACL_TYPE_NFS4, xmd->acl[2]);
-         acl_free(xmd->acl[2]);
       }
    }
 
    void freeMetaData(ExtMetaData *xmd)
    {
+      // Releasing the EXAs
       for (int i = 0; i < 2; i++)
          if (xmd->exa[i])
          {
@@ -315,15 +381,12 @@
             free(namelist);
          }
 
-      // writing the ACLs
+      // Releasing the ACLs
       if (xmd->acl[0])
          acl_free(xmd->acl[0]);
 
       if (xmd->acl[1])
          acl_free(xmd->acl[1]);
-
-      if (xmd->acl[2])
-         acl_free(xmd->acl[2]);
    }
 
 #endif

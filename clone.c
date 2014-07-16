@@ -55,7 +55,8 @@ static const char *version = "Version 1.0.5b (r"STRINGIFY(SVNREV)")";
 
 // Source device and file system information
 dev_t  gSourceDev;
-char  *gSourceFSType;
+int   *gSourceFSType;
+int   *gDestinFSType;
 bool   gSourceRdOnly;
 int    gVerbosityLevel = 1;
 int    gErrorCount     = 0;
@@ -208,6 +209,7 @@ typedef struct
 {
    int          stage;
    llong        fid;
+   int          sfd,  dfd;
    char        *src, *dst;
    struct stat  st;
    CopyChunk   *chunk;
@@ -325,11 +327,17 @@ static inline void feedback(const char action, const char *path)
 
 #pragma mark ••• Passing the Attributes •••
 
-void setAttributes(const char *src, const char *dst, struct stat *st)
+void setAttributes(int sfd, int dfd, const char *src, const char *dst, struct stat *st)
 {
    ExtMetaData xmd;
-   getMetaData(src, &xmd);
-   setMetaData(dst, &xmd);
+   getMetaData(sfd, src, st, &xmd);
+   setMetaData(dfd, dst, &xmd);
+
+   if (dfd != -1)
+      close(dfd);
+
+   if (sfd != -1)
+      close(sfd);
 
    lchown(dst, st->st_uid, st->st_gid);
    lchmod(dst, modperms(st->st_mode));
@@ -363,6 +371,8 @@ void *reader(void *threadArg)
       int in = open(qitem->src, O_RDONLY);
       if (in != -1)
       {
+         qitem->sfd = in;
+
          if (gReadNoCache)
             fnocache(in);
 
@@ -403,8 +413,6 @@ void *reader(void *threadArg)
                pthread_cond_signal(&writer_cond);
             pthread_mutex_unlock(&writer_mutex);
          } while (state != final);
-
-         close(in);
       }
 
       else // (in == -1)
@@ -416,6 +424,7 @@ void *reader(void *threadArg)
          printf("\nFile %s could not be opened for reading: %s.\n", qitem->src, errorString);
 
          pthread_mutex_lock(&writer_mutex);
+         close(qitem->sfd); qitem->sfd = -1;
          qitem->stage = skipping;            // do not write anything, only clean-up
          if (gWriterWait)
             pthread_cond_signal(&writer_cond);
@@ -456,6 +465,8 @@ void *writer(void *threadArg)
       int out = open(qitem->dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, modperms(qitem->st.st_mode));
       if (out != -1)
       {
+         qitem->dfd = out;
+
          if (gWriteNoCache)
             fnocache(out);
 
@@ -494,8 +505,6 @@ void *writer(void *threadArg)
             }
          } while (state != final && rc == NO_ERROR);
 
-         close(out);
-
          if (rc == NO_ERROR)
          {
             gTotalItems++;
@@ -509,6 +518,9 @@ void *writer(void *threadArg)
          else // (rc != NO_ERROR)
          {
             // 1. clean up
+            close(qitem->dfd); qitem->dfd = -1;
+            close(qitem->sfd); qitem->sfd = -1;
+
             while (state != final)
             {
                recycleFinishedChunk(chunk);
@@ -530,7 +542,7 @@ void *writer(void *threadArg)
 
          // Error check again -- the atomic file copy may have resolved a previous issue
          if (rc == NO_ERROR)
-            setAttributes(qitem->src, qitem->dst, &qitem->st);
+            setAttributes(qitem->sfd, qitem->dfd, qitem->src, qitem->dst, &qitem->st);
 
          else // (rc != NO_ERROR)
          {
@@ -542,6 +554,8 @@ void *writer(void *threadArg)
 
       else // (out == -1)
       {
+         close(qitem->sfd); qitem->sfd = -1;
+
          // Drop a message, remove the file from the queue, and clean-up without further notice.
          gErrorCount++;
          strerror_r(errno, errorString, errStrLen);
@@ -595,6 +609,8 @@ void fileCopyScheduler(llong fid, char *src, char *dst, struct stat *st)
    pthread_mutex_lock(&reader_mutex);
    qitem->stage = nascent;
    qitem->fid   = fid;
+   qitem->sfd   = -1;
+   qitem->dfd   = -1;
    qitem->src   = src;
    qitem->dst   = dst;
    qitem->st    = *st;
@@ -676,7 +692,7 @@ int hlnkCopy(char *src, char *dst, size_t dl, struct stat *st)
    }
 
    if (rc == NO_ERROR)
-      setAttributes(src, dst, st);
+      setAttributes(-1, -1, src, dst, st);
 
    free(dst);
    free(src);
@@ -691,9 +707,8 @@ int fileEmpty(char *src, char *dst, struct stat *st)
    int out = open(dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, modperms(st->st_mode));
    if (out != -1)
    {
-      close(out);
+      setAttributes(-1, -1, src, dst, st);
       gTotalItems++;
-      setAttributes(src, dst, st);
       rc = NO_ERROR;
    }
 
@@ -739,7 +754,7 @@ int slnkCopy(char *src, char *dst, struct stat *st)
    // 2. create a new symlink at dst pointing to the revealed path
    if (symlink(revpath, dst) == NO_ERROR)
    {
-      setAttributes(src, dst, st);
+      setAttributes(-1, -1, src, dst, st);
       gTotalItems++;
    }
 
@@ -1041,7 +1056,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                      if (sstat.st_dev == gSourceDev)
                         clone(nsrc, nsl, ndst, ndl);
 
-                     setAttributes(nsrc, ndst, &sstat);
+                     setAttributes(-1, -1, nsrc, ndst, &sstat);
                   }
 
                   else
@@ -1232,7 +1247,7 @@ int main(int argc, char *const argv[])
 {
    int    optchr, vLevel;
    size_t homelen = 0;
-   char   ch, *o, *p, *q, *usrhome, *cmd = argv[0];
+   char   ch, *o, *p, *q, *usrhome = "", *cmd = argv[0];
    bool   d_flag = false, i_flag = false, s_flag = false, y_flag = false;
    FILE  *exclf;
    struct stat exclst;
@@ -1438,8 +1453,12 @@ int main(int argc, char *const argv[])
 
       struct statfs sfs;
       statfs(src, &sfs);
-      gSourceFSType = sfs.f_fstypename;
+      gSourceFSType = (int *)sfs.f_fstypename;
       gSourceRdOnly = sfs.f_flags & MNT_RDONLY;
+
+      struct statfs dfs;
+      statfs(dst, &dfs);
+      gDestinFSType = (int *)dfs.f_fstypename;
 
       gHLinkINodes = createTable(8192);
 
@@ -1478,7 +1497,7 @@ int main(int argc, char *const argv[])
          feedback('=', dst);
 
       clone(src, sl, dst, dl);
-      setAttributes(src, dst, &sstat);
+      setAttributes(-1, -1, src, dst, &sstat);
 
       gRunning = false;
       pthread_cond_signal(&reader_cond);
