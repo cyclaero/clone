@@ -67,8 +67,8 @@ typedef struct ExtAttrs
 
    typedef struct
    {
-      exa_t exa[1];  // Mac OS X got a single name space for all extended attributes
-      acl_t acl[1];  // Mac OS X knows only one kind of ACL: extended
+      exa_t exa;     // Mac OS X got a single name space for all extended attributes
+      acl_t acl;     // Mac OS X knows only one kind of ACL: extended
    } ExtMetaData;
 
 #elif defined (__FreeBSD__)
@@ -78,13 +78,13 @@ typedef struct ExtAttrs
    typedef struct
    {
       exa_t  exa[2]; // FreeBSD got 2 name spaces for extended attributes: system and user
-      acl_t  acl[3]; // FreeBSD knows 3 types of ACLs: access, default, and nfs4
+      acl_t acl[2];  // FreeBSD knows 3 types of ACLs: (Access|NFSv4) and default
    } ExtMetaData;
 
 #endif
 
-void getMetaData(const char *src, ExtMetaData *xmd);
-void setMetaData(const char *dst, ExtMetaData *xmd);
+void getMetaData(int fd, const char *src, struct stat *st, ExtMetaData *xmd);
+void setMetaData(int fd, const char *dst, ExtMetaData *xmd);
 void freeMetaData(ExtMetaData *xmd);
 
 

@@ -6,6 +6,12 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
+2014-07-15 21:51  rj - r52
+
+   * clone.c, utils.h, utils.c
+     - optimized ACL reading.
+     - utilize open file descriptors for meta data cloning.
+
 2014-07-12 20:00  rj - r51
 
    * utils.c
