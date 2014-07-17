@@ -76,11 +76,11 @@ Node **gExcludeList    = NULL;
 
 // Thread synchronization
 bool   gRunning        = true;
-bool   gQItemWait      = false;
-bool   gChunkWait      = false;
-bool   gReaderWait     = false;
-bool   gWriterWait     = false;
-bool   gLevelWait      = false;
+bool   gQItemWaitFlag  = false;
+bool   gChunkWaitFlag  = false;
+bool   gReaderWaitFlag = false;
+bool   gWriterWaitFlag = false;
+bool   gLevelWaitFlag  = false;
 
 pthread_t       reader_thread;
 pthread_t       writer_thread;
@@ -102,6 +102,23 @@ pthread_mutex_t level_mutex  = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t  level_cond   = PTHREAD_COND_INITIALIZER;
 
 
+static inline void pthread_cond_wait_flag(pthread_cond_t *cond, pthread_mutex_t *mutex, bool *flag)
+{
+   if (*flag)
+      pthread_cond_signal(cond);
+   else
+      *flag = true;
+   pthread_cond_wait(cond, mutex);
+   *flag = false;
+}
+
+// The chunk dispenser works very much like a towel dispenser featuring
+// an integrated recycling unit. It dispenses empty chunks, informs the
+// chunk currently being worked on, and it recycles finished chunks.
+// Actually, the recycling procedure is as simple as setting the state
+// flag to empty. This won't work with towels, since towel users won't
+// accept dirty towels only being marked clean :-)
+
 #define chunkBlckSize 1048576
 #define maxChunkCount 100
 
@@ -117,13 +134,6 @@ typedef struct CopyChunk
    char   buffer[chunkBlckSize];
 } CopyChunk;
 
-
-// Our chunk dispenser is very much like a towel dispenser that features
-// an integrated recycling unit. It dispenses empty chunks, informs the
-// chunk currently being worked on, and it recycles finished chunks.
-// Actually, our recycling process is as simple as setting the state flag
-// to empty. This won't work with towels, since towel users won't accept
-// dirty towels only being marked clean :-)
 CopyChunk gChunkDispenser[maxChunkCount];
 
 #pragma pack()
@@ -138,11 +148,7 @@ CopyChunk *dispenseEmptyChunk(void)
 
    pthread_mutex_lock(&chunk_mutex);
    while (gNextChunkSN == gHighChunkSN)
-   {
-      gChunkWait = true;
-      pthread_cond_wait(&chunk_cond, &chunk_mutex);
-      gChunkWait = false;
-   }
+      pthread_cond_wait_flag(&chunk_cond, &chunk_mutex, &gChunkWaitFlag);
 
    chunk = &gChunkDispenser[gNextChunkSN];
    chunk->state = empty;
@@ -191,7 +197,7 @@ void recycleFinishedChunk(CopyChunk *chunk)
          else if (gHighChunkSN != maxChunkCount)
             gHighChunkSN = gBaseChunkSN;
 
-         if (gChunkWait && gNextChunkSN < gHighChunkSN)
+         if (gChunkWaitFlag && gNextChunkSN < gHighChunkSN)
             pthread_cond_signal(&chunk_cond);
       }
       pthread_mutex_unlock(&chunk_mutex);
@@ -219,7 +225,6 @@ QItem gQItemDispenser[maxQItemCount];
 
 #pragma pack()
 
-
 int gBaseQItemSN = 0;
 int gHighQItemSN = maxQItemCount;
 int gNextQItemSN = 0;
@@ -230,11 +235,7 @@ QItem *dispenseNewQItem(void)
 
    pthread_mutex_lock(&qitem_mutex);
    while (gNextQItemSN == gHighQItemSN)
-   {
-      gQItemWait = true;
-      pthread_cond_wait(&qitem_cond, &qitem_mutex);
-      gQItemWait = false;
-   }
+      pthread_cond_wait_flag(&qitem_cond, &qitem_mutex, &gQItemWaitFlag);
 
    qitem = &gQItemDispenser[gNextQItemSN];
 
@@ -295,7 +296,7 @@ void recycleFinishedQItem(QItem *qitem)
          else if (gHighQItemSN != maxQItemCount)
             gHighQItemSN = gBaseQItemSN;
 
-         if (gQItemWait && gNextQItemSN < gHighQItemSN)
+         if (gQItemWaitFlag && gNextQItemSN < gHighQItemSN)
             pthread_cond_signal(&qitem_cond);
       }
       pthread_mutex_unlock(&qitem_mutex);
@@ -362,11 +363,7 @@ void *reader(void *threadArg)
 
       pthread_mutex_lock(&reader_mutex);
       while (!(qitem = informReadingQItem()))         // wait for new items that are ready for reading
-      {
-         gReaderWait = true;
-         pthread_cond_wait(&reader_cond, &reader_mutex);
-         gReaderWait = false;
-      }
+         pthread_cond_wait_flag(&reader_cond, &reader_mutex, &gReaderWaitFlag);
       qitem->stage = reading;                         // ready for reading now
       pthread_mutex_unlock(&reader_mutex);
 
@@ -412,7 +409,7 @@ void *reader(void *threadArg)
                qitem->chunk = chunk;
                qitem->stage = writing;       // ready for writing now
             }
-            if (gWriterWait)
+            if (gWriterWaitFlag)
                pthread_cond_signal(&writer_cond);
             pthread_mutex_unlock(&writer_mutex);
          } while (state != final);
@@ -429,7 +426,7 @@ void *reader(void *threadArg)
          pthread_mutex_lock(&writer_mutex);
          close(qitem->sfd); qitem->sfd = -1;
          qitem->stage = skipping;            // do not write anything, only clean-up
-         if (gWriterWait)
+         if (gWriterWaitFlag)
             pthread_cond_signal(&writer_cond);
          pthread_mutex_unlock(&writer_mutex);
       }
@@ -450,15 +447,9 @@ void *writer(void *threadArg)
 
       pthread_mutex_lock(&writer_mutex);
       while (!(qitem = informWritingQItem()))         // wait for items that are ready for writing
-      {
-         gWriterWait = true;
-         pthread_cond_wait(&writer_cond, &writer_mutex);
-         gWriterWait = false;
-      }
-
+         pthread_cond_wait_flag(&writer_cond, &writer_mutex, &gWriterWaitFlag);
       fid = qitem->fid;
       pthread_mutex_unlock(&writer_mutex);
-
 
       if (qitem->stage == skipping)                   // check for an invalidated qitem
          goto cleanup;                                // skip writing
@@ -491,11 +482,7 @@ void *writer(void *threadArg)
                {
                   pthread_mutex_lock(&writer_mutex);
                   while (!(chunk = informCurrentChunk()))
-                  {
-                     gWriterWait = true;
-                     pthread_cond_wait(&writer_cond, &writer_mutex);
-                     gWriterWait = false;
-                  }
+                     pthread_cond_wait_flag(&writer_cond, &writer_mutex, &gWriterWaitFlag);
                   pthread_mutex_unlock(&writer_mutex);
                }
             }
@@ -530,11 +517,7 @@ void *writer(void *threadArg)
 
                pthread_mutex_lock(&writer_mutex);
                while (!(chunk = informCurrentChunk()))
-               {
-                  gWriterWait = true;
-                  pthread_cond_wait(&writer_cond, &writer_mutex);
-                  gWriterWait = false;
-               }
+                  pthread_cond_wait_flag(&writer_cond, &writer_mutex, &gWriterWaitFlag);
                state = chunk->state;
                pthread_mutex_unlock(&writer_mutex);
             }
@@ -574,11 +557,7 @@ void *writer(void *threadArg)
             {
                pthread_mutex_lock(&writer_mutex);
                while (!(chunk = informCurrentChunk()))
-               {
-                  gWriterWait = true;
-                  pthread_cond_wait(&writer_cond, &writer_mutex);
-                  gWriterWait = false;
-               }
+                  pthread_cond_wait_flag(&writer_cond, &writer_mutex, &gWriterWaitFlag);
                pthread_mutex_unlock(&writer_mutex);
             }
          } while (state != final);
@@ -590,13 +569,13 @@ void *writer(void *threadArg)
       recycleFinishedQItem(qitem);
 
       pthread_mutex_lock(&reader_mutex);
-      if (gReaderWait)
+      if (gReaderWaitFlag)
          pthread_cond_signal(&reader_cond);
       pthread_mutex_unlock(&reader_mutex);
 
       pthread_mutex_lock(&level_mutex);
       gWriterLast = fid;
-      if (gLevelWait)
+      if (gLevelWaitFlag)
          pthread_cond_signal(&level_cond);
       pthread_mutex_unlock(&level_mutex);
    }
@@ -617,7 +596,7 @@ void fileCopyScheduler(llong fid, char *src, char *dst, struct stat *st)
    qitem->src   = src;
    qitem->dst   = dst;
    qitem->st    = *st;
-   if (gReaderWait)
+   if (gReaderWaitFlag)
       pthread_cond_signal(&reader_cond);
    pthread_mutex_unlock(&reader_mutex);
 }
@@ -912,10 +891,11 @@ int deleteEntityTree(Node *syncNode, const char *path, size_t pl)
 }
 
 
-void clone(const char *src, size_t sl, const char *dst, size_t dl)
+void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *st)
 {
    static char   errorString[errStrLen];
    static llong  fileID = 0;
+   struct stat    sstat, dstat;
 
    DIR           *sdp, *ddp;
    struct dirent *sep, *dep, bep;
@@ -925,7 +905,6 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
    Node *syncNode, **syncEntities = NULL;
    if ((gIncremental || gSynchronize) && (ddp = opendir(dst)))
    {
-      struct stat st;
       Value  value = {Simple, {0}};
       syncEntities = createTable(1024);
       while (readdir_r(ddp, &bep, &dep) == NO_ERROR && dep)
@@ -941,10 +920,10 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
             else if (dep->d_type == DT_UNKNOWN)    // need to call lstat()
             {
                char path[dl+dep->d_namlen+1]; strcpy(path, dst); strcpy(path+dl, dep->d_name);
-               if (lstat(path, &st) != -1 &&
-                   ((st.st_mode &= S_IFMT) == S_IFDIR || st.st_mode == S_IFREG || st.st_mode == S_IFLNK))
+               if (lstat(path, &dstat) != -1 &&
+                   ((dstat.st_mode &= S_IFMT) == S_IFDIR || dstat.st_mode == S_IFREG || dstat.st_mode == S_IFLNK))
                {
-                  value.v.i = st.st_mode;
+                  value.v.i = dstat.st_mode;
                   storeFSName(syncEntities, dep->d_name, dep->d_namlen, &value);
                }
             }
@@ -970,8 +949,6 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
             // next source path
             size_t nsl  = sl + sep->d_namlen;   // next source length
             char  *nsrc = strcpy(malloc(nsl+2), src); strcpy(nsrc+sl, sep->d_name);
-            struct stat sstat;
-
             if (gExcludeList && findFSName(gExcludeList, nsrc, nsl) || lstat(nsrc, &sstat) != NO_ERROR)
             {
                free(nsrc);
@@ -981,8 +958,8 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
             // next destination path
             size_t ndl  = dl + sep->d_namlen;   // next destination length
             char  *ndst = strcpy(malloc(ndl+2), dst); strcpy(ndst+dl, sep->d_name);
-            struct stat dstat; dstat.st_ino = 0;
 
+            dstat.st_ino = 0;
             if (syncEntities &&                 // only non-NULL in incremental or synchronize mode
                 (syncNode = findFSName(syncEntities, sep->d_name, sep->d_namlen)))
             {
@@ -1057,9 +1034,9 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
 
                      *(short *)&nsrc[nsl++] = *(short *)&ndst[ndl++] = *(short *)"/";
                      if (sstat.st_dev == gSourceDev)
-                        clone(nsrc, nsl, ndst, ndl);
-
-                     setAttributes(-1, -1, nsrc, ndst, &sstat);
+                        clone(nsrc, nsl, ndst, ndl, &sstat);
+                     else
+                        setAttributes(-1, -1, nsrc, ndst, &sstat);
                   }
 
                   else
@@ -1139,19 +1116,8 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
 
       closedir(sdp);
 
-      if (fCount)
-      {
-         pthread_mutex_lock(&level_mutex);
-         while (gWriterLast < lastID)
-         {
-            gLevelWait = true;
-            pthread_cond_wait(&level_cond, &level_mutex);
-            gLevelWait = false;
-         }
-         pthread_mutex_unlock(&level_mutex);
-      }
-
       if (syncEntities)
+      {
          if (gIncremental)
             releaseTable(syncEntities);
 
@@ -1164,6 +1130,17 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl)
                   deleteEntityTree(syncEntities[i], dst, dl);
             free(syncEntities);
          }
+      }
+
+      if (fCount)
+      {
+         pthread_mutex_lock(&level_mutex);
+         while (lastID > gWriterLast)
+            pthread_cond_wait_flag(&level_cond, &level_mutex, &gLevelWaitFlag);
+         pthread_mutex_unlock(&level_mutex);
+      }
+
+      setAttributes(-1, -1, src, dst, st);
    }
 }
 
@@ -1500,8 +1477,7 @@ int main(int argc, char *const argv[])
       else
          feedback('=', dst);
 
-      clone(src, sl, dst, dl);
-      setAttributes(-1, -1, src, dst, &sstat);
+      clone(src, sl, dst, dl, &sstat);
 
       gRunning = false;
       pthread_cond_signal(&reader_cond);
