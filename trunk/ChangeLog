@@ -6,6 +6,12 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
+2014-07-17 20:42  rj - r55
+
+   * clone.c
+     - implemented static inline pthread_cond_wait_flag().
+     - directory attributes are now set at the end of clone() and not after the call to clone().
+
 2014-07-16 21:02  rj - r54
 
    * clone.c, clone.1
