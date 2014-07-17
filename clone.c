@@ -1230,7 +1230,7 @@ Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-v level] [-x exclude-list] [-X excl-
        -s                  Completely synchronize destination with source.\n\n\
        -v level            Verbosity level (default = 1):\n\
                            0 - no output\n\
-                           1 - show directory action: '+' for add, '-' for delete, '=' for keep\n\
+                           1 - show directory action: + for add, - for delete, = for keep\n\
                            2 - indicate cloned files by '.'\n\
                            3 - display the path names of cloned file system items\n\n\
        -x exclude-list     Colon separated list of entity names or full path names to be\n\
