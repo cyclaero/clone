@@ -945,7 +945,8 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
          {
             if (gExcludeList && findFSName(gExcludeList, sep->d_name, sep->d_namlen))
             {
-               removeFSName(syncEntities, sep->d_name, sep->d_namlen);
+               if (syncEntities)
+                  removeFSName(syncEntities, sep->d_name, sep->d_namlen);
                continue;
             }
 
@@ -954,7 +955,8 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
             char  *nsrc = strcpy(malloc(nsl+2), src); strcpy(nsrc+sl, sep->d_name);
             if (gExcludeList && findFSName(gExcludeList, nsrc, nsl) || lstat(nsrc, &sstat) != NO_ERROR)
             {
-               removeFSName(syncEntities, sep->d_name, sep->d_namlen);
+               if (syncEntities)
+                  removeFSName(syncEntities, sep->d_name, sep->d_namlen);
                free(nsrc);
                continue;
             }
