@@ -6,6 +6,11 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
+2014-07-19 23:24  rj - r57
+
+   * clone.c
+     - only call removeFSName() if the respective table is not nil.
+
 2014-07-19 22:57  rj - r56
 
    * clone.c
