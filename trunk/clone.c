@@ -944,13 +944,17 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
              (sep->d_name[1] != '.' ||  sep->d_name[2] != '\0')))
          {
             if (gExcludeList && findFSName(gExcludeList, sep->d_name, sep->d_namlen))
+            {
+               removeFSName(syncEntities, sep->d_name, sep->d_namlen);
                continue;
+            }
 
             // next source path
             size_t nsl  = sl + sep->d_namlen;   // next source length
             char  *nsrc = strcpy(malloc(nsl+2), src); strcpy(nsrc+sl, sep->d_name);
             if (gExcludeList && findFSName(gExcludeList, nsrc, nsl) || lstat(nsrc, &sstat) != NO_ERROR)
             {
+               removeFSName(syncEntities, sep->d_name, sep->d_namlen);
                free(nsrc);
                continue;
             }
@@ -1492,9 +1496,11 @@ int main(int argc, char *const argv[])
             gettimeofday(&t1, NULL);
             double t = t1.tv_sec - t0.tv_sec + (t1.tv_usec - t0.tv_usec)/1.0e6;
             gTotalSize /= 1048576.0;
-            printf("\n%llu items copied, %.1f MB in %.2f s -- %.1f MB/s\n", gTotalItems, gTotalSize, t, gTotalSize/t);
+            if (gTotalItems != 1)
+               printf("\n%llu items copied, %.1f MB in %.2f s -- %.1f MB/s\n", gTotalItems, gTotalSize, t, gTotalSize/t);
+            else
+               printf("\n1 item copied, %.1f MB in %.2f s -- %.1f MB/s\n", gTotalSize, t, gTotalSize/t);
          }
-
          else
             printf("\nNo items copied.\n");
 
