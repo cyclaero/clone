@@ -6,6 +6,13 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
+2014-07-24 17:35  rj - r59
+
+   * clone.c
+     - make sure not to create by accident a FS tree on the wrong device.
+     - release of version 1.0.6b.
+
+
 •••• 2014-07-20 -- Created a snapshot of r58 for release as v1.0.5, stored it on Google Drive and submitted it to FreeBSD Ports ••••
 
 

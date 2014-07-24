@@ -51,13 +51,16 @@
 #include "utils.h"
 
 
-static const char *version = "Version 1.0.5 (r"STRINGIFY(SVNREV)")";
+static const char *version = "Version 1.0.6b (r"STRINGIFY(SVNREV)")";
 
-// Source device and file system information
-dev_t  gSourceDev;
+// Device and file system informations
 int   *gSourceFSType;
-int   *gDestinFSType;
 bool   gSourceRdOnly;
+dev_t  gSourceDev;
+
+int   *gDestinFSType;
+dev_t  gDestinDev;
+
 int    gVerbosityLevel = 1;
 int    gErrorCount     = 0;
 
@@ -1027,8 +1030,9 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
             switch (sstat.st_mode & S_IFMT)
             {
                case S_IFDIR:      // A directory.
-                  if ((dstat.st_ino != 0 || lstat(ndst, &dstat) == NO_ERROR) && S_ISDIR(dstat.st_mode) ||
-                       dstat.st_ino == 0 && (dirCreated = (mkdir(ndst, modperms(sstat.st_mode)) == NO_ERROR)))
+                  if (((dstat.st_ino != 0 || lstat(ndst, &dstat) == NO_ERROR) && S_ISDIR(dstat.st_mode)
+                     || dstat.st_ino == 0 && (dirCreated = (mkdir(ndst, modperms(sstat.st_mode)) == NO_ERROR)) && lstat(ndst, &dstat) == NO_ERROR)
+                     && dstat.st_dev == gDestinDev)
                   {
                      if (dirCreated)
                      {
@@ -1439,16 +1443,16 @@ int main(int argc, char *const argv[])
       struct timeval t0, t1;
       gettimeofday(&t0, NULL);
 
-      gSourceDev = sstat.st_dev;
-
       struct statfs sfs;
       statfs(src, &sfs);
       gSourceFSType = (int *)sfs.f_fstypename;
       gSourceRdOnly = sfs.f_flags & MNT_RDONLY;
+      gSourceDev    = sstat.st_dev;
 
       struct statfs dfs;
       statfs(dst, &dfs);
       gDestinFSType = (int *)dfs.f_fstypename;
+      gDestinDev    = dstat.st_dev;
 
       gHLinkINodes = createTable(8192);
 
