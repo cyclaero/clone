@@ -660,8 +660,8 @@ int atomCopy(char *src, char *dst, struct stat *st)
 
 int hlnkCopy(char *src, char *dst, size_t dl, struct stat *st)
 {
-   int    rc;
-   Node  *ino = findINode(gHLinkINodes, st->st_ino);
+   int   rc;
+   Node *ino = findINode(gHLinkINodes, st->st_ino);
 
    if (ino && ino->value.v.i == st->st_dev)
    {
