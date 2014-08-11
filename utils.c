@@ -586,6 +586,8 @@ Node *findTreeNode(ulong key, const char *name, Node *node)
 
 int addTreeNode(ulong key, const char *name, ssize_t namlen, Value *value, Node **node, Node **passed)
 {
+   static const Value zeros = {0, {.i = 0}};
+
    Node *o = *node;
 
    if (o == NULL)                         // if the key is not in the tree
@@ -603,14 +605,12 @@ int addTreeNode(ulong key, const char *name, ssize_t namlen, Value *value, Node 
       int  change;
       long ord = order(key, name, o);
 
-      if (ord == 0)                       // if the key/name is already in the tree then
+      if (ord == 0)                       // if the name is already in the tree then
       {
-         *passed = o;                     // report back the passed node into which the new value has been entered
-         free(o->name);                   // release old memory allocations
-         releaseValue(&o->value);         // by default, kind is empty and releaseValue() does nothing
-         o->name = strcpy(malloc(namlen+1), name);
-         if (value)
-            o->value = *value;
+         releaseValue(&o->value);         // release the old value - if kind is empty then releaseValue() does nothing
+         o->value = (value) ? *value      // either store the new one or
+                            :  zeros;     // zero-out the value struct
+         *passed = o;                     // report back the node in which the value was modified
          return 0;
       }
 
@@ -861,7 +861,7 @@ void removeINode(Node *table[], ulong key)
       table[tidx] = NULL;
    }
    else
-      removeTreeNode(key, NULL, &table[tidx]);
+      removeTreeNode(key, node->name, &table[tidx]);
 }
 
 
