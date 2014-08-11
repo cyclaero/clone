@@ -105,15 +105,15 @@ enum
 
 typedef struct
 {
-   long    kind;  // negative kinds indicate dynamically allocated data
+   long    kind;     // negative kinds indicate dynamically allocated data
    union
    {
-      bool    b;  // a boolean value
-      long    i;  // an integer
-      double  d;  // a floating point number
-      time_t  t;  // a time stamp
-      char   *s;  // a string
-      void   *p;  // a pointer to anything
+      bool    b;     // a boolean value
+      long    i;     // an integer
+      double  d;     // a floating point number
+      time_t  t;     // a time stamp
+      char   *s;     // a string
+      void   *p;     // a pointer to anything
    } v;
 } Value;
 
@@ -123,8 +123,9 @@ void releaseValue(Value *value);
 typedef struct Node
 {
    // keys
-   ulong  key;    // if this is zero, then
-   char  *name;   // use name as the key.
+   ulong  key;       // if this is zero, then
+   char  *name;      // use name as the key.
+   ssize_t naml;     // char length of the name
 
    // value
    Value  value;
@@ -138,7 +139,7 @@ typedef struct Node
 // CAUTION: It is an error to call these functions with key being 0 AND name being NULL.
 //          Either of both must be non-zero. No error cheking is done within these recursive functions.
 Node *findTreeNode(ulong key, const char *name, Node  *node);
-int    addTreeNode(ulong key, const char *name, ssize_t namlen, Value *value, Node **node, Node **passed);
+int    addTreeNode(ulong key, const char *name, ssize_t naml, Value *value, Node **node, Node **passed);
 int removeTreeNode(ulong key, const char *name, Node **node);
 void   releaseTree(Node *node);
 
@@ -149,9 +150,9 @@ Node **createTable(uint n);
 void  releaseTable(Node *table[]);
 
 Node    *findINode(Node *table[], ulong key);
-Node   *storeINode(Node *table[], ulong key, const char *fsname, ssize_t namlen, long dev);
+Node   *storeINode(Node *table[], ulong key, const char *fsname, ssize_t naml, long dev);
 void   removeINode(Node *table[], ulong key);
 
-Node   *findFSName(Node *table[], const char *fsname, ssize_t namlen);
-Node  *storeFSName(Node *table[], const char *fsname, ssize_t namlen, Value *value);
-void  removeFSName(Node *table[], const char *fsname, ssize_t namlen);
+Node   *findFSName(Node *table[], const char *fsname, ssize_t naml);
+Node  *storeFSName(Node *table[], const char *fsname, ssize_t naml, Value *value);
+void  removeFSName(Node *table[], const char *fsname, ssize_t naml);

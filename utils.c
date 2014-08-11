@@ -73,7 +73,7 @@ extern int *gDestinFSType;
                                     : listxattr(src, NULL, 0, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION);
       if (listsize > 0)
       {
-         char   *namelist = malloc(listsize);
+         char *namelist = malloc(listsize);
          if (fd != -1)
             flistxattr(fd, namelist, listsize, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION);
          else
@@ -584,7 +584,7 @@ Node *findTreeNode(ulong key, const char *name, Node *node)
       return NULL;
 }
 
-int addTreeNode(ulong key, const char *name, ssize_t namlen, Value *value, Node **node, Node **passed)
+int addTreeNode(ulong key, const char *name, ssize_t naml, Value *value, Node **node, Node **passed)
 {
    static const Value zeros = {0, {.i = 0}};
 
@@ -594,7 +594,8 @@ int addTreeNode(ulong key, const char *name, ssize_t namlen, Value *value, Node 
    {                                      // then add it into a new leaf
       o = *node = *passed = calloc(1, sizeof(Node));
       o->key = key;
-      o->name = strcpy(malloc(namlen+1), name);
+      o->name = strcpy(malloc(naml+1), name);
+      o->naml = naml;
       if (value)
          o->value = *value;
       return 1;                           // add the weight of 1 leaf onto the balance
@@ -615,10 +616,10 @@ int addTreeNode(ulong key, const char *name, ssize_t namlen, Value *value, Node 
       }
 
       else if (ord < 0)
-         change = -addTreeNode(key, name, namlen, value, &o->L, passed);
+         change = -addTreeNode(key, name, naml, value, &o->L, passed);
 
       else // (ord > 0)
-         change = +addTreeNode(key, name, namlen, value, &o->R, passed);
+         change = +addTreeNode(key, name, naml, value, &o->R, passed);
 
       if (change)
          if (abs(o->B += change) > 1)
@@ -743,10 +744,10 @@ void releaseTree(Node *node)
 //
 // Many thanks to Austin!
 
-static inline uint mmh3(const char *name, ssize_t namlen)
+static inline uint mmh3(const char *name, ssize_t naml)
 {
-   int    i, n   = (int)(namlen/4);
-   uint   k1, h1 = (uint)namlen;          // quite tiny (0.2 %) better distribution by seeding the name length
+   int    i, n   = (int)(naml/4);
+   uint   k1, h1 = (uint)naml;          // quite tiny (0.2 %) better distribution by seeding the name length
    uint  *quads  = (uint *)(name + n*4);
    uchar *tail   = (uchar *)quads;
 
@@ -763,7 +764,7 @@ static inline uint mmh3(const char *name, ssize_t namlen)
    }
 
    k1 = 0;
-   switch (namlen & 3)
+   switch (naml & 3)
    {
       case 3: k1 ^= (uint)(tail[2] << 16);
       case 2: k1 ^= (uint)(tail[1] << 8);
@@ -774,7 +775,7 @@ static inline uint mmh3(const char *name, ssize_t namlen)
               h1 ^= k1;
    };
 
-   h1 ^= namlen;
+   h1 ^= naml;
    h1 ^= h1 >> 16;
    h1 *= 0x85EBCA6B;
    h1 ^= h1 >> 13;
@@ -833,16 +834,16 @@ Node *findINode(Node *table[], ulong key)
    return findTreeNode(key, NULL, table[key%n + 1]);
 }
 
-Node *storeINode(Node *table[], ulong key, const char *fsname, ssize_t namlen, long dev)
+Node *storeINode(Node *table[], ulong key, const char *fsname, ssize_t naml, long dev)
 {
    if (fsname && *fsname)
    {
-      if (namlen < 0)
-         namlen = strlen(fsname);
+      if (naml < 0)
+         naml = strlen(fsname);
       uint  n = *(uint *)table;
       Value value = {Simple, {.i = dev}};
       Node *passed;
-      addTreeNode(key, fsname, namlen, &value, &table[key%n + 1], &passed);
+      addTreeNode(key, fsname, naml, &value, &table[key%n + 1], &passed);
       return passed;
    }
    else
@@ -853,7 +854,8 @@ void removeINode(Node *table[], ulong key)
 {
    uint  tidx = key % *(uint *)table + 1;
    Node *node = table[tidx];
-   if (node && !node->L && !node->R)
+   if (node)
+      if (!node->L && !node->R)
    {
       free(node->name);
       releaseValue(&node->value);
@@ -866,46 +868,47 @@ void removeINode(Node *table[], ulong key)
 
 
 // Storing/retrieving file system names
-Node *findFSName(Node *table[], const char *fsname, ssize_t namlen)
+Node *findFSName(Node *table[], const char *fsname, ssize_t naml)
 {
    if (fsname && *fsname)
    {
-      if (namlen < 0)
-         namlen = strlen(fsname);
+      if (naml < 0)
+         naml = strlen(fsname);
       uint  n = *(uint *)table;
-      ulong hkey = mmh3(fsname, namlen);
+      ulong hkey = mmh3(fsname, naml);
       return findTreeNode(hkey, fsname, table[hkey%n + 1]);
    }
    else
       return NULL;
 }
 
-Node *storeFSName(Node *table[], const char *fsname, ssize_t namlen, Value *value)
+Node *storeFSName(Node *table[], const char *fsname, ssize_t naml, Value *value)
 {
    if (fsname && *fsname)
    {
-      if (namlen < 0)
-         namlen = strlen(fsname);
+      if (naml < 0)
+         naml = strlen(fsname);
       uint  n = *(uint *)table;
-      ulong hkey = mmh3(fsname, namlen);
+      ulong hkey = mmh3(fsname, naml);
       Node *passed;
-      addTreeNode(hkey, fsname, namlen, value, &table[hkey%n + 1], &passed);
+      addTreeNode(hkey, fsname, naml, value, &table[hkey%n + 1], &passed);
       return passed;
    }
    else
       return NULL;
 }
 
-void removeFSName(Node *table[], const char *fsname, ssize_t namlen)
+void removeFSName(Node *table[], const char *fsname, ssize_t naml)
 {
    if (fsname && *fsname)
    {
-      if (namlen < 0)
-         namlen = strlen(fsname);
-      ulong hkey = mmh3(fsname, namlen);
+      if (naml < 0)
+         naml = strlen(fsname);
+      ulong hkey = mmh3(fsname, naml);
       uint  tidx = hkey % *(uint *)table + 1;
       Node *node = table[tidx];
-      if (node && !node->L && !node->R)
+      if (node)
+         if (!node->L && !node->R)
       {
          free(node->name);
          releaseValue(&node->value);
