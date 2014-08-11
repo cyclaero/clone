@@ -6,6 +6,14 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
+2014-08-11 16:11  rj - r61
+
+   * utils.h, utils.c, clone.xcodeproj
+     - in removeName() make sure to call removeTreeNode() only if node != NULL.
+     - renamed namelen to naml in AVL tree and hash table functions.
+     - store naml alongside the name in the nodes.
+     - improved Xcode project settings, more warnings, c11, and do the Release builds using -Ofast.
+
 2014-08-11 08:08  rj - r60
 
    * utils.c
