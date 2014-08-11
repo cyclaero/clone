@@ -105,11 +105,11 @@ enum
 
 typedef struct
 {
-   long    kind;     // negative kinds indicate dynamically allocated data
+   llong    kind;     // negative kinds indicate dynamically allocated data
    union
    {
       bool    b;     // a boolean value
-      long    i;     // an integer
+      llong   i;     // an integer
       double  d;     // a floating point number
       time_t  t;     // a time stamp
       char   *s;     // a string
@@ -123,7 +123,7 @@ void releaseValue(Value *value);
 typedef struct Node
 {
    // keys
-   ulong  key;       // if this is zero, then
+   ullong key;       // if this is zero, then
    char  *name;      // use name as the key.
    ssize_t naml;     // char length of the name
 
@@ -138,9 +138,9 @@ typedef struct Node
 
 // CAUTION: It is an error to call these functions with key being 0 AND name being NULL.
 //          Either of both must be non-zero. No error cheking is done within these recursive functions.
-Node *findTreeNode(ulong key, const char *name, Node  *node);
-int    addTreeNode(ulong key, const char *name, ssize_t naml, Value *value, Node **node, Node **passed);
-int removeTreeNode(ulong key, const char *name, Node **node);
+Node *findTreeNode(ullong key, const char *name, Node  *node);
+int    addTreeNode(ullong key, const char *name, ssize_t naml, Value *value, Node **node, Node **passed);
+int removeTreeNode(ullong key, const char *name, Node **node);
 void   releaseTree(Node *node);
 
 
@@ -149,9 +149,9 @@ void   releaseTree(Node *node);
 Node **createTable(uint n);
 void  releaseTable(Node *table[]);
 
-Node    *findINode(Node *table[], ulong key);
-Node   *storeINode(Node *table[], ulong key, const char *fsname, ssize_t naml, long dev);
-void   removeINode(Node *table[], ulong key);
+Node    *findINode(Node *table[], ullong key);
+Node   *storeINode(Node *table[], ullong key, const char *fsname, ssize_t naml, long dev);
+void   removeINode(Node *table[], ullong key);
 
 Node   *findFSName(Node *table[], const char *fsname, ssize_t naml);
 Node  *storeFSName(Node *table[], const char *fsname, ssize_t naml, Value *value);

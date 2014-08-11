@@ -553,9 +553,9 @@ static int pickNextNode(Node **node, Node **exch)
 // CAUTION: It is an error to call these functions with key being 0 AND name being NULL.
 //          Either of both must be non-zero. No error cheking is done within these recursive functions.
 
-static inline long order(ulong key, const char *name, Node *node)
+static inline llong order(ullong key, const char *name, Node *node)
 {
-   long result;
+   llong result;
 
    if (key)
       if ((result = key - node->key) || !name)
@@ -564,11 +564,11 @@ static inline long order(ulong key, const char *name, Node *node)
    return strcmp(name, node->name);
 }
 
-Node *findTreeNode(ulong key, const char *name, Node *node)
+Node *findTreeNode(ullong key, const char *name, Node *node)
 {
    if (node)
    {
-      long ord = order(key, name, node);
+      llong ord = order(key, name, node);
 
       if (ord == 0)
          return node;
@@ -584,7 +584,7 @@ Node *findTreeNode(ulong key, const char *name, Node *node)
       return NULL;
 }
 
-int addTreeNode(ulong key, const char *name, ssize_t naml, Value *value, Node **node, Node **passed)
+int addTreeNode(ullong key, const char *name, ssize_t naml, Value *value, Node **node, Node **passed)
 {
    static const Value zeros = {0, {.i = 0}};
 
@@ -603,8 +603,8 @@ int addTreeNode(ulong key, const char *name, ssize_t naml, Value *value, Node **
 
    else
    {
-      int  change;
-      long ord = order(key, name, o);
+      int   change;
+      llong ord = order(key, name, o);
 
       if (ord == 0)                       // if the name is already in the tree then
       {
@@ -631,7 +631,7 @@ int addTreeNode(ulong key, const char *name, ssize_t naml, Value *value, Node **
    }
 }
 
-int removeTreeNode(ulong key, const char *name, Node **node)
+int removeTreeNode(ullong key, const char *name, Node **node)
 {
    Node *o = *node;
 
@@ -640,8 +640,8 @@ int removeTreeNode(ulong key, const char *name, Node **node)
 
    else
    {
-      int  change;
-      long ord = order(key, name, o);
+      int   change;
+      llong ord = order(key, name, o);
 
       if (ord == 0)
       {
@@ -828,13 +828,13 @@ void releaseTable(Node *table[])
 
 
 // Storing/retrieving file system names by inode
-Node *findINode(Node *table[], ulong key)
+Node *findINode(Node *table[], ullong key)
 {
    uint n = *(uint *)table;
    return findTreeNode(key, NULL, table[key%n + 1]);
 }
 
-Node *storeINode(Node *table[], ulong key, const char *fsname, ssize_t naml, long dev)
+Node *storeINode(Node *table[], ullong key, const char *fsname, ssize_t naml, long dev)
 {
    if (fsname && *fsname)
    {
@@ -850,7 +850,7 @@ Node *storeINode(Node *table[], ulong key, const char *fsname, ssize_t naml, lon
       return NULL;
 }
 
-void removeINode(Node *table[], ulong key)
+void removeINode(Node *table[], ullong key)
 {
    uint  tidx = key % *(uint *)table + 1;
    Node *node = table[tidx];

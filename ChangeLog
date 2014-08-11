@@ -6,6 +6,11 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
+2014-08-11 18:11  rj - r62
+
+   * utils.h, utils.c, clone.c
+     - made the sources 32bit clean.
+
 2014-08-11 16:11  rj - r61
 
    * utils.h, utils.c, clone.xcodeproj
