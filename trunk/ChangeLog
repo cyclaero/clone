@@ -6,6 +6,13 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
+2014-08-11 08:08  rj - r60
+
+   * utils.c
+     - in addTreeNode() in the case of (ord == 0) it is not necessary to deallocate the name and allocate/copy it again,
+       since it is guaranteed that the new name is the same as the old name.
+     - zero-out the value struct when modifying a node and no new value (NULL) was supplied.
+
 2014-07-24 17:35  rj - r59
 
    * clone.c
