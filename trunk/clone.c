@@ -784,7 +784,7 @@ int dtType2stFmt(int d_type)
 
 int deleteDirectory(char *path, size_t pl);
 
-int deleteDirEntity(char *path, size_t pl, long st_mode)
+int deleteDirEntity(char *path, size_t pl, llong st_mode)
 {
    static char errorString[errStrLen];
    const char *ftype;
@@ -1321,7 +1321,7 @@ int main(int argc, char *const argv[])
                      gExcludeList = createTable(256);
 
                   p = alloca(exclst.st_size + 1);
-                  if (fread(p, exclst.st_size, 1, exclf) == 1)
+                  if (fread(p, (size_t)exclst.st_size, 1, exclf) == 1)
                   {
                      for (q = p + exclst.st_size - 1; q > p && (*q == '\n' || *q == '\r'); q--);   // strip trailing line breaks
                      if (q > p)

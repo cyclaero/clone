@@ -105,7 +105,7 @@ enum
 
 typedef struct
 {
-   llong    kind;     // negative kinds indicate dynamically allocated data
+   llong    kind;    // negative kinds indicate dynamically allocated data
    union
    {
       bool    b;     // a boolean value
@@ -150,7 +150,7 @@ Node **createTable(uint n);
 void  releaseTable(Node *table[]);
 
 Node    *findINode(Node *table[], ullong key);
-Node   *storeINode(Node *table[], ullong key, const char *fsname, ssize_t naml, long dev);
+Node   *storeINode(Node *table[], ullong key, const char *fsname, ssize_t naml, llong dev);
 void   removeINode(Node *table[], ullong key);
 
 Node   *findFSName(Node *table[], const char *fsname, ssize_t naml);

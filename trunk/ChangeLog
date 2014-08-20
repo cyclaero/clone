@@ -6,6 +6,11 @@ Copyright (c) 2013. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
+2014-08-20 20:02  rj - r63
+
+   * utils.h, utils.c, clone.c
+     - switch all long variables and parameters to llong aka. long long.
+
 2014-08-11 18:11  rj - r62
 
    * utils.h, utils.c, clone.c
