@@ -808,7 +808,7 @@ void releaseTable(Node *table[])
 
 // The key-name/value store serves for two purposes.
 //
-//   1. quickly store/find inodes (unsigned long values)
+//   1. quickly store/find inodes (unsigned long long values)
 //      and the respective source file/link name
 //
 //   2. store and retrieve file system names that
@@ -834,7 +834,7 @@ Node *findINode(Node *table[], ullong key)
    return findTreeNode(key, NULL, table[key%n + 1]);
 }
 
-Node *storeINode(Node *table[], ullong key, const char *fsname, ssize_t naml, long dev)
+Node *storeINode(Node *table[], ullong key, const char *fsname, ssize_t naml, llong dev)
 {
    if (fsname && *fsname)
    {
