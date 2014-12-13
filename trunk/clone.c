@@ -196,7 +196,6 @@ void recycleFinishedChunk(CopyChunk *chunk)
             gBaseChunkSN %= maxChunkCount;
             gHighChunkSN  = maxChunkCount;
          }
-
          else if (gHighChunkSN != maxChunkCount)
             gHighChunkSN = gBaseChunkSN;
 
@@ -295,7 +294,6 @@ void recycleFinishedQItem(QItem *qitem)
             gBaseQItemSN %= maxQItemCount;
             gHighQItemSN  = maxQItemCount;
          }
-
          else if (gHighQItemSN != maxQItemCount)
             gHighQItemSN = gBaseQItemSN;
 
@@ -696,7 +694,6 @@ int fileEmpty(char *src, char *dst, struct stat *st)
       gTotalItems++;
       rc = NO_ERROR;
    }
-
    else
       rc = DST_ERROR;
 
@@ -732,7 +729,6 @@ int slnkCopy(char *src, char *dst, struct stat *st)
       rc = SRC_ERROR;
       goto cleanup;
    }
-
    else
       revpath[revlen] = '\0';
 
@@ -742,7 +738,6 @@ int slnkCopy(char *src, char *dst, struct stat *st)
       setAttributes(-1, -1, src, dst, st);
       gTotalItems++;
    }
-
    else
       rc = DST_ERROR;
 
@@ -1080,7 +1075,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
                         }
                      }
 
-                  else
+                  else // (sstat.st_nlink > 1)
                      if ((rc = hlnkCopy(nsrc, ndst, ndl, &sstat)) != NO_ERROR)
                      {
                         gErrorCount++;

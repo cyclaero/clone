@@ -621,6 +621,7 @@ int addTreeNode(ullong key, const char *name, ssize_t naml, Value *value, Node *
       else // (ord > 0)
          change = +addTreeNode(key, name, naml, value, &o->R, passed);
 
+
       if (change)
          if (abs(o->B += change) > 1)
             return 1 - balanceNode(node);
@@ -705,6 +706,7 @@ int removeTreeNode(ullong key, const char *name, Node **node)
 
       else // (ord > 0)
          change = -removeTreeNode(key, name, &o->R);
+
 
       if (change)
          if (abs(o->B += change) > 1)
