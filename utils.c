@@ -2,7 +2,7 @@
 //  clone
 //
 //  Created by Dr. Rolf Jansen on 2013-01-13.
-//  Copyright (c) 2013-2014. All rights reserved.
+//  Copyright (c) 2013-2015. All rights reserved.
 //
 //  Redistribution and use in source and binary forms, with or without modification,
 //  are permitted provided that the following conditions are met:
@@ -27,9 +27,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdarg.h>
 #include <string.h>
+#include <syslog.h>
 #include <unistd.h>
 #include <sys/time.h>
 #include <sys/stat.h>
@@ -69,15 +71,15 @@ extern int *gDestinFSType;
    {
       // Reading extended attributes
       exa_t   xa0 = NULL, *xan = &xa0, xa;
-      ssize_t listsize = (fd != -1) ? flistxattr(fd, NULL, 0, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION)
-                                    : listxattr(src, NULL, 0, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION);
+      ssize_t listsize = (fd != -1) ? flistxattr(fd, NULL, 0, XATTR_SHOWCOMPRESSION)
+                                    : listxattr(src, NULL, 0, XATTR_SHOWCOMPRESSION|XATTR_NOFOLLOW);
       if (listsize > 0)
       {
-         char *namelist = malloc(listsize);
+         char *namelist = allocate(listsize, false);
          if (fd != -1)
-            flistxattr(fd, namelist, listsize, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION);
+            flistxattr(fd, namelist, listsize, XATTR_SHOWCOMPRESSION);
          else
-            listxattr(src, namelist, listsize, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION);
+            listxattr(src, namelist, listsize, XATTR_SHOWCOMPRESSION|XATTR_NOFOLLOW);
 
          char   *name = namelist;
          char   *value;
@@ -86,17 +88,17 @@ extern int *gDestinFSType;
          do
          {
             if (fd != -1)
-               if ((size = fgetxattr(fd, name, NULL, 0, 0, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION)) > 0)
-                  fgetxattr(fd, name, value = malloc(size), size, 0, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION);
+               if ((size = fgetxattr(fd, name, NULL, 0, 0, XATTR_SHOWCOMPRESSION)) > 0)
+                  fgetxattr(fd, name, value = allocate(size, false), size, 0, XATTR_SHOWCOMPRESSION);
                else
                   value = NULL;
             else
-               if ((size = getxattr(src, name, NULL, 0, 0, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION)) > 0)
-                  getxattr(src, name, value = malloc(size), size, 0, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION);
+               if ((size = getxattr(src, name, NULL, 0, 0, XATTR_SHOWCOMPRESSION|XATTR_NOFOLLOW)) > 0)
+                  getxattr(src, name, value = allocate(size, false), size, 0, XATTR_SHOWCOMPRESSION|XATTR_NOFOLLOW);
                else
                   value = NULL;
 
-            xa = *xan = malloc(sizeof(ExtAttrs));
+            xa = *xan = allocate(sizeof(ExtAttrs), true);
             xa->name  = name;
             xa->value = value;
             xa->size  = size;
@@ -124,15 +126,15 @@ extern int *gDestinFSType;
          while (xa)
          {
             if (fd != -1)
-               fsetxattr(fd, xa->name, xa->value, xa->size, 0, XATTR_NOFOLLOW);
+               fsetxattr(fd, xa->name, xa->value, xa->size, 0, 0x0000);
             else
                setxattr(dst, xa->name, xa->value, xa->size, 0, XATTR_NOFOLLOW);
-            free(xa->value);
+            deallocate(VPR(xa->value), false);
             void *fxa = xa;
             xa = xa->next;
-            free(fxa);
+            deallocate(VPR(fxa), false);
          }
-         free(namelist);
+         deallocate(VPR(namelist), false);
       }
 
       // Writing the ACLs
@@ -156,12 +158,12 @@ extern int *gDestinFSType;
 
          while (xa)
          {
-            free(xa->value);
+            deallocate(VPR(xa->value), false);
             void *fxa = xa;
             xa = xa->next;
-            free(fxa);
+            deallocate(VPR(fxa), false);
          }
-         free(namelist);
+         deallocate(VPR(namelist), false);
       }
 
       // Releasing the ACLs
@@ -215,9 +217,7 @@ extern int *gDestinFSType;
                                         : extattr_list_link(src, ans, NULL, 0)) + 1; // the extracted list is not nul terminated, so leave space for the extra nul
          if (listsize > 1)
          {
-            // FIXME: occasionally, something in the system is writing beyond the supplied memory buffer.
-            //        for the time being supply quite a lot space, 10times the indicated seems to work.
-            char   *namelist = malloc(listsize *= 10);
+            char *namelist = allocate(listsize, false);
             listsize = extattr_list_link(src, ans, namelist, listsize);
 
             // the name list is actually a sequence of joined pascal strings -> unsigned char
@@ -233,16 +233,16 @@ extern int *gDestinFSType;
 
                if (fd != -1)
                   if ((size = extattr_get_fd(fd, ans, (char *)name, NULL, 0)) > 0)
-                     extattr_get_fd(fd, ans, (char *)name, value = malloc(size), size);
+                     extattr_get_fd(fd, ans, (char *)name, value = allocate(size, false), size);
                   else
                      value = NULL;
                else
                   if ((size = extattr_get_link(src, ans, (char *)name, NULL, 0)) > 0)
-                     extattr_get_link(src, ans, (char *)name, value = malloc(size), size);
+                     extattr_get_link(src, ans, (char *)name, value = allocate(size, false), size);
                   else
                      value = NULL;
 
-               xa = *xan = malloc(sizeof(ExtAttrs));
+               xa = *xan = allocate(sizeof(ExtAttrs), true);
                xa->name  = (char *)name;
                xa->value = value;
                xa->size  = size;
@@ -329,7 +329,7 @@ extern int *gDestinFSType;
          {
             int   ans = (i == 0) ? EXTATTR_NAMESPACE_SYSTEM : EXTATTR_NAMESPACE_USER;
             exa_t xa = xmd->exa[i];
-            char *namelist = xa->name;
+            char *namelist = xa->name - 1;   // list of pascal strings, whose address is the first name - 1 for the length byte
 
             while (xa)
             {
@@ -337,12 +337,12 @@ extern int *gDestinFSType;
                   extattr_set_fd(fd, ans, xa->name, xa->value, xa->size);
                else
                   extattr_set_link(dst, ans, xa->name, xa->value, xa->size);
-               free(xa->value);
+               deallocate(VPR(xa->value), false);
                void *fxa = xa;
                xa = xa->next;
-               free(fxa);
+               deallocate(VPR(fxa), false);
             }
-            free(namelist);
+            deallocate(VPR(namelist), false);
          }
 
       // Writing the ACLs
@@ -369,16 +369,16 @@ extern int *gDestinFSType;
          if (xmd->exa[i])
          {
             exa_t xa = xmd->exa[i];
-            char *namelist = xa->name;
+            char *namelist = xa->name - 1;   // list of pascal strings, whose address is the first name - 1 for the length byte
 
             while (xa)
             {
-               free(xa->value);
+               deallocate(VPR(xa->value), false);
                void *fxa = xa;
                xa = xa->next;
-               free(fxa);
+               deallocate(VPR(fxa), false);
             }
-            free(namelist);
+            deallocate(VPR(namelist), false);
          }
 
       // Releasing the ACLs
@@ -392,25 +392,167 @@ extern int *gDestinFSType;
 #endif
 
 
+ssize_t gAllocationTotal = 0;
+
+static inline void countAllocation(ssize_t size)
+{
+   if (__sync_add_and_fetch(&gAllocationTotal, size) < 0)
+   {
+      syslog(LOG_ERR, "Corruption of allocated memory detected by countAllocation().");
+      exit(EXIT_FAILURE);
+   }
+}
+
+void *allocate(ssize_t size, bool cleanout)
+{
+   if (size >= 0)
+   {
+      allocation *a;
+
+      if (cleanout)
+      {
+         if ((a = calloc(1, allocationMetaSize + size + sizeof(size_t))) == NULL)
+            return NULL;
+      }
+
+      else
+      {
+         if ((a = malloc(allocationMetaSize + size + sizeof(size_t))) == NULL)
+            return NULL;
+
+         *(size_t *)((void *)a + allocationMetaSize + size) = 0;   // place a (size_t)0 just above the payload as the upper boundary of the allocation
+      }
+
+      countAllocation(size);
+      a->size  = size;
+      a->check = size | (size_t)a;
+      return &a->payload;
+   }
+   else
+      return NULL;
+}
+
+void *reallocate(void *p, ssize_t size, bool cleanout, bool free_on_error)
+{
+   if (size >= 0)
+      if (p)
+      {
+         allocation *a = p - allocationMetaSize;
+
+         if (a->check == (a->size | (size_t)a) && *(ssize_t *)((void *)a + allocationMetaSize + a->size) == 0)
+            a->check = 0;
+         else
+         {
+            syslog(LOG_ERR, "Corruption of allocated memory detected by reallocate().");
+            exit(EXIT_FAILURE);
+         }
+
+         if ((p = realloc(a, allocationMetaSize + size + sizeof(size_t))) == NULL)
+         {
+            if (free_on_error)
+            {
+               countAllocation(-a->size);
+               free(a);
+            }
+            return NULL;
+         }
+         else
+            a = p;
+
+         if (cleanout)
+            bzero((void *)a + allocationMetaSize + a->size, size - a->size + sizeof(size_t));
+         else
+            *(ssize_t *)((void *)a + allocationMetaSize + size) = 0;   // place a (size_t)0 just above the payload as the upper boundary of the allocation
+
+         countAllocation(size - a->size);
+         a->size  = size;
+         a->check = size | (size_t)a;
+         return &a->payload;
+      }
+      else
+         return allocate(size, cleanout);
+
+   return NULL;
+}
+
+void deallocate(void **p, bool cleanout)
+{
+   if (p && *p)
+   {
+      allocation *a = *p - allocationMetaSize;
+
+      if (a->check == (a->size | (size_t)a) && *(ssize_t *)((void *)a + allocationMetaSize + a->size) == 0)
+         a->check = 0;
+      else
+      {
+         syslog(LOG_ERR, "Corruption of allocated memory detected by deallocate().");
+         exit(EXIT_FAILURE);
+      }
+
+      countAllocation(-a->size);
+      if (cleanout)
+         bzero((void *)a, allocationMetaSize + a->size + sizeof(size_t));
+      free(a);
+
+      *p = NULL;
+   }
+}
+
+void deallocate_batch(bool cleanout, ...)
+{
+   void   **p;
+   va_list  vl;
+   va_start(vl, cleanout);
+
+   while (p = va_arg(vl, void **))
+      if (*p)
+      {
+         allocation *a = *p - allocationMetaSize;
+
+         if (a->check == (a->size | (size_t)a) && *(ssize_t *)((void *)a + allocationMetaSize + a->size) == 0)
+            a->check = 0;
+         else
+         {
+            syslog(LOG_ERR, "Corruption of allocated memory detected by deallocate_batch().");
+            exit(EXIT_FAILURE);
+         }
+
+         countAllocation(-a->size);
+         if (cleanout)
+            bzero((void *)a, allocationMetaSize + a->size + sizeof(size_t));
+         free(a);
+
+         *p = NULL;
+      }
+
+   va_end(vl);
+}
+
+
 #pragma mark ••• AVL Tree •••
 
 #pragma mark ••• Value Data householding •••
 
-void releaseValue(Value *value)
+static inline void releaseValue(Value *value)
 {
    switch (-value->kind)   // dynamic data, has to be released
    {
       case Simple:
       case Data:
-         free(value->v.p);
+         deallocate(VPR(value->p), false);
          break;
 
       case String:
-         free(value->v.s);
+         deallocate(VPR(value->s), false);
          break;
 
       case Dictionary:
-         releaseTable((Node **)value->v.p);
+         releaseTable((Node **)value->p);
+         break;
+
+      case Other:
+         if (value->deallocate)
+            value->deallocate(VPR(value->p), false);
          break;
    }
 }
@@ -586,19 +728,28 @@ Node *findTreeNode(ullong key, const char *name, Node *node)
 
 int addTreeNode(ullong key, const char *name, ssize_t naml, Value *value, Node **node, Node **passed)
 {
-   static const Value zeros = {0, {.i = 0}};
+   static const Value zeros = {{.i = 0}, 0, NULL};
 
    Node *o = *node;
 
-   if (o == NULL)                         // if the key is not in the tree
+   if (o == NULL)                         // if the key/name is not in the tree
    {                                      // then add it into a new leaf
-      o = *node = *passed = calloc(1, sizeof(Node));
-      o->key = key;
-      o->name = strcpy(malloc(naml+1), name);
-      o->naml = naml;
-      if (value)
-         o->value = *value;
-      return 1;                           // add the weight of 1 leaf onto the balance
+      if (o = allocate(sizeof(Node), true))
+         if (o->name = allocate(naml+1, false))
+         {
+            o->key = key;
+            strcpy(o->name, name);
+            o->naml = naml;
+            if (value)
+               o->value = *value;
+            *node = *passed = o;          // report back the new node into which the new value has been entered
+            return 1;                     // add the weight of 1 leaf onto the balance
+         }
+         else
+            deallocate(VPR(o), false);
+
+      *passed = NULL;
+      return 0;                           // Out of Memory situation, nothing changed
    }
 
    else
@@ -606,10 +757,10 @@ int addTreeNode(ullong key, const char *name, ssize_t naml, Value *value, Node *
       int   change;
       llong ord = order(key, name, o);
 
-      if (ord == 0)                       // if the name is already in the tree then
+      if (ord == 0)                       // if the key/name is already in the tree then
       {
          releaseValue(&o->value);         // release the old value - if kind is empty then releaseValue() does nothing
-         o->value = (value) ? *value      // either store the new one or
+         o->value = (value) ? *value      // either store the new value or
                             :  zeros;     // zero-out the value struct
          *passed = o;                     // report back the node in which the value was modified
          return 0;
@@ -620,7 +771,6 @@ int addTreeNode(ullong key, const char *name, ssize_t naml, Value *value, Node *
 
       else // (ord > 0)
          change = +addTreeNode(key, name, naml, value, &o->R, passed);
-
 
       if (change)
          if (abs(o->B += change) > 1)
@@ -637,7 +787,7 @@ int removeTreeNode(ullong key, const char *name, Node **node)
    Node *o = *node;
 
    if (o == NULL)
-      return 0;                              // not found -> recursively do nothing
+      return 0;                           // not found -> recursively do nothing
 
    else
    {
@@ -652,11 +802,11 @@ int removeTreeNode(ullong key, const char *name, Node **node)
 
          if (!p || !q)
          {
-            free((*node)->name);
             releaseValue(&(*node)->value);
-            free(*node);
+            deallocate_batch(false, VPR((*node)->name),
+                                    VPR(*node), NULL);
             *node = (p > q) ? p : q;
-            return 1;                        // remove the weight of 1 leaf from the balance
+            return 1;                     // remove the weight of 1 leaf from the balance
          }
 
          else
@@ -694,9 +844,9 @@ int removeTreeNode(ullong key, const char *name, Node **node)
             }
 
             o->B = b;
-            free((*node)->name);
             releaseValue(&(*node)->value);
-            free(*node);
+            deallocate_batch(false, VPR((*node)->name),
+                                    VPR(*node), NULL);
             *node = o;
          }
       }
@@ -706,7 +856,6 @@ int removeTreeNode(ullong key, const char *name, Node **node)
 
       else // (ord > 0)
          change = -removeTreeNode(key, name, &o->R);
-
 
       if (change)
          if (abs(o->B += change) > 1)
@@ -727,9 +876,9 @@ void releaseTree(Node *node)
       if (node->R)
          releaseTree(node->R);
 
-      free(node->name);
       releaseValue(&node->value);
-      free(node);
+      deallocate_batch(false, VPR(node->name),
+                              VPR(node), NULL);
    }
 }
 
@@ -791,8 +940,9 @@ static inline uint mmh3(const char *name, ssize_t naml)
 // Table creation and release
 Node **createTable(uint n)
 {
-   Node **table = calloc(n + 1, sizeof(Node *));
-   *(uint *)table = n;
+   Node **table = allocate((n+1)*sizeof(Node *), true);
+   if (table)
+      *(uint *)table = n;
    return table;
 }
 
@@ -803,7 +953,7 @@ void releaseTable(Node *table[])
       uint i, n = *(uint *)table;
       for (i = 1; i <= n; i++)
          releaseTree(table[i]);
-      free(table);
+      deallocate(VPR(table), false);
    }
 }
 
@@ -827,46 +977,6 @@ void releaseTable(Node *table[])
 //
 // For the sake of efficiency and clarity of usage here come
 // two sets of find...(), store...(), and remove...() functions.
-
-
-// Storing/retrieving file system names by inode
-Node *findINode(Node *table[], ullong key)
-{
-   uint n = *(uint *)table;
-   return findTreeNode(key, NULL, table[key%n + 1]);
-}
-
-Node *storeINode(Node *table[], ullong key, const char *fsname, ssize_t naml, llong dev)
-{
-   if (fsname && *fsname)
-   {
-      if (naml < 0)
-         naml = strlen(fsname);
-      uint  n = *(uint *)table;
-      Value value = {Simple, {.i = dev}};
-      Node *passed;
-      addTreeNode(key, fsname, naml, &value, &table[key%n + 1], &passed);
-      return passed;
-   }
-   else
-      return NULL;
-}
-
-void removeINode(Node *table[], ullong key)
-{
-   uint  tidx = key % *(uint *)table + 1;
-   Node *node = table[tidx];
-   if (node)
-      if (!node->L && !node->R)
-   {
-      free(node->name);
-      releaseValue(&node->value);
-      free(node);
-      table[tidx] = NULL;
-   }
-   else
-      removeTreeNode(key, node->name, &table[tidx]);
-}
 
 
 // Storing/retrieving file system names
@@ -911,13 +1021,51 @@ void removeFSName(Node *table[], const char *fsname, ssize_t naml)
       Node *node = table[tidx];
       if (node)
          if (!node->L && !node->R)
+         {
+            releaseValue(&node->value);
+            deallocate_batch(false, VPR(node->name),
+                                    VPR(table[tidx]), NULL);
+         }
+         else
+            removeTreeNode(hkey, fsname, &table[tidx]);
+   }
+}
+
+
+// Storing/retrieving file system names by inode
+Node *findINode(Node *table[], ullong key)
+{
+   uint n = *(uint *)table;
+   return findTreeNode(key, NULL, table[key%n + 1]);
+}
+
+Node *storeINode(Node *table[], ullong key, const char *fsname, ssize_t naml, llong dev)
+{
+   if (fsname && *fsname)
+   {
+      if (naml < 0)
+         naml = strlen(fsname);
+      uint  n = *(uint *)table;
+      Value value = {{.i = dev}, Simple, NULL};
+      Node *passed;
+      addTreeNode(key, fsname, naml, &value, &table[key%n + 1], &passed);
+      return passed;
+   }
+   else
+      return NULL;
+}
+
+void removeINode(Node *table[], ullong key)
+{
+   uint  tidx = key % *(uint *)table + 1;
+   Node *node = table[tidx];
+   if (node)
+      if (!node->L && !node->R)
       {
-         free(node->name);
          releaseValue(&node->value);
-         free(node);
-         table[tidx] = NULL;
+         deallocate_batch(false, VPR(node->name),
+                                 VPR(table[tidx]), NULL);
       }
       else
-         removeTreeNode(hkey, fsname, &table[tidx]);
-   }
+         removeTreeNode(key, node->name, &table[tidx]);
 }

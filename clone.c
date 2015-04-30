@@ -2,7 +2,7 @@
 //  clone
 //
 //  Created by Dr. Rolf Jansen on 2013-01-13.
-//  Copyright (c) 2013-2014. All rights reserved.
+//  Copyright (c) 2013-2015. All rights reserved.
 //
 //  Redistribution and use in source and binary forms, with or without modification,
 //  are permitted provided that the following conditions are met:
@@ -215,12 +215,12 @@ enum {virgin, nascent, reading, writing, skipping};
 
 typedef struct
 {
-   int          stage;
-   llong        fid;
-   int          sfd,  dfd;
-   char        *src, *dst;
-   struct stat  st;
-   CopyChunk   *chunk;
+   int         stage;
+   llong       fid;
+   int         sfd,  dfd;
+   char       *src, *dst;
+   struct stat st;
+   CopyChunk  *chunk;
 } QItem;
 
 QItem gQItemDispenser[maxQItemCount];
@@ -333,13 +333,12 @@ void setAttributes(int sfd, int dfd, const char *src, const char *dst, struct st
 {
    ExtMetaData xmd;
    getMetaData(sfd, src, st, &xmd);
-   setMetaData(dfd, dst, &xmd);
-
-   if (dfd != -1)
-      close(dfd);
-
    if (sfd != -1)
       close(sfd);
+
+   setMetaData(dfd, dst, &xmd);
+   if (dfd != -1)
+      close(dfd);
 
    lchown(dst, st->st_uid, st->st_gid);
    lchmod(dst, modperms(st->st_mode));
@@ -565,8 +564,7 @@ void *writer(void *threadArg)
       }
 
    cleanup:
-      free(qitem->dst);
-      free(qitem->src);
+      deallocate_batch(false, VPR(qitem->dst), VPR(qitem->src), NULL);
       recycleFinishedQItem(qitem);
 
       pthread_mutex_lock(&reader_mutex);
@@ -618,7 +616,7 @@ int atomCopy(char *src, char *dst, struct stat *st)
 
          int    rc = NO_ERROR;
          size_t size, filesize = 0;
-         char  *buffer = malloc(chunkBlckSize);
+         char  *buffer = allocate(chunkBlckSize, false);
 
          do
          {
@@ -630,7 +628,7 @@ int atomCopy(char *src, char *dst, struct stat *st)
                filesize += size;
          } while (rc == NO_ERROR && size == chunkBlckSize);
 
-         free(buffer);
+         deallocate(VPR(buffer), false);
 
          close(out);
          close(in);
@@ -661,7 +659,7 @@ int hlnkCopy(char *src, char *dst, size_t dl, struct stat *st)
    int   rc;
    Node *ino = findINode(gHLinkINodes, st->st_ino);
 
-   if (ino && ino->value.v.i == st->st_dev)
+   if (ino && ino->value.i == st->st_dev)
    {
       chflags(ino->name, 0);
       rc = (link(ino->name, dst) == NO_ERROR) ? 0 : DST_ERROR;
@@ -677,9 +675,7 @@ int hlnkCopy(char *src, char *dst, size_t dl, struct stat *st)
    if (rc == NO_ERROR)
       setAttributes(-1, -1, src, dst, st);
 
-   free(dst);
-   free(src);
-
+   deallocate_batch(false, VPR(dst), VPR(src), NULL);
    return rc;
 }
 
@@ -690,15 +686,14 @@ int fileEmpty(char *src, char *dst, struct stat *st)
    int out = open(dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, modperms(st->st_mode));
    if (out != -1)
    {
-      setAttributes(-1, -1, src, dst, st);
+      setAttributes(-1, out, src, dst, st);
       gTotalItems++;
       rc = NO_ERROR;
    }
    else
       rc = DST_ERROR;
 
-   free(dst);
-   free(src);
+   deallocate_batch(false, VPR(dst), VPR(src), NULL);
    return rc;
 }
 
@@ -710,12 +705,12 @@ int slnkCopy(char *src, char *dst, struct stat *st)
    size_t revlen, maxlen = 1024;
 
    // 1. reveal the path pointed to by the link
-   revpath = malloc(maxlen);
+   revpath = allocate(maxlen, false);
    while ((revlen = readlink(src, revpath, maxlen)) >= maxlen)
    {
-      free(revpath);
+      deallocate(VPR(revpath), false);
       if ((maxlen += maxlen) <= 1048576)
-         revpath = malloc(maxlen += maxlen);
+         revpath = allocate(maxlen += maxlen, false);
       else
       {
          revpath = NULL;      // if the length of the path to be revealed does'nt fit yet
@@ -742,9 +737,7 @@ int slnkCopy(char *src, char *dst, struct stat *st)
       rc = DST_ERROR;
 
 cleanup:
-   free(revpath);
-   free(dst);
-   free(src);
+   deallocate_batch(false, VPR(revpath), VPR(dst), VPR(src), NULL);
    return rc;
 }
 
@@ -850,7 +843,7 @@ int deleteDirectory(char *path, size_t pl)
          {
             // next path
             size_t npl   = pl + ep->d_namlen;
-            char  *npath = strcpy(malloc(npl+2), path); strcpy(npath+pl, ep->d_name);
+            char  *npath = strcpy(allocate(npl+2, false), path); strcpy(npath+pl, ep->d_name);
 
             if (ep->d_type != DT_UNKNOWN)
                rc = deleteDirEntity(npath, npl, dtType2stFmt(ep->d_type));
@@ -859,7 +852,7 @@ int deleteDirectory(char *path, size_t pl)
             else
                rc = DST_ERROR;
 
-            free(npath);
+            deallocate(VPR(npath), false);
          }
 
       closedir(dp);
@@ -878,21 +871,22 @@ int deleteEntityTree(Node *syncNode, const char *path, size_t pl)
       rcR = deleteEntityTree(syncNode->R, path, pl);
 
    size_t npl   = pl + strlen(syncNode->name);
-   char  *npath = strcpy(malloc(npl+2), path); strcpy(npath+pl, syncNode->name);
-   rc = deleteDirEntity(npath, npl, syncNode->value.v.i);
-   free(npath);
+   char  *npath = strcpy(allocate(npl+2, false), path); strcpy(npath+pl, syncNode->name);
+   rc = deleteDirEntity(npath, npl, syncNode->value.i);
 
-   free(syncNode->name);
-   free(syncNode);
-
-   return (rcL != NO_ERROR) ? rcL : (rcR != NO_ERROR) ? rcR : rc;
+   deallocate_batch(false, VPR(npath), VPR(syncNode->name), VPR(syncNode), NULL);
+   return (rcL != NO_ERROR)
+          ? rcL
+          : (rcR != NO_ERROR)
+            ? rcR
+            : rc;
 }
 
 
 void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *st)
 {
-   static char   errorString[errStrLen];
-   static llong  fileID = 0;
+   static char    errorString[errStrLen];
+   static llong   fileID = 0;
    struct stat    sstat, dstat;
 
    DIR           *sdp, *ddp;
@@ -903,7 +897,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
    Node *syncNode, **syncEntities = NULL;
    if ((gIncremental || gSynchronize) && (ddp = opendir(dst)))
    {
-      Value  value = {Simple, {0}};
+      Value  value = {{.i = 0}, Simple, NULL};
       syncEntities = createTable(1024);
       while (readdir_r(ddp, &bep, &dep) == NO_ERROR && dep)
          if ( dep->d_name[0] != '.' || (dep->d_name[1] != '\0' &&
@@ -911,7 +905,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
          {
             if (dep->d_type == DT_DIR || dep->d_type == DT_REG || dep->d_type == DT_LNK)
             {
-               value.v.i = dtType2stFmt(dep->d_type);
+               value.i = dtType2stFmt(dep->d_type);
                storeFSName(syncEntities, dep->d_name, dep->d_namlen, &value);
             }
 
@@ -921,7 +915,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
                if (lstat(path, &dstat) != -1 &&
                    ((dstat.st_mode &= S_IFMT) == S_IFDIR || dstat.st_mode == S_IFREG || dstat.st_mode == S_IFLNK))
                {
-                  value.v.i = dstat.st_mode;
+                  value.i = dstat.st_mode;
                   storeFSName(syncEntities, dep->d_name, dep->d_namlen, &value);
                }
             }
@@ -950,18 +944,18 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
 
             // next source path
             size_t nsl  = sl + sep->d_namlen;   // next source length
-            char  *nsrc = strcpy(malloc(nsl+2), src); strcpy(nsrc+sl, sep->d_name);
+            char  *nsrc = strcpy(allocate(nsl+2, false), src); strcpy(nsrc+sl, sep->d_name);
             if (gExcludeList && findFSName(gExcludeList, nsrc, nsl) || lstat(nsrc, &sstat) != NO_ERROR)
             {
                if (syncEntities)
                   removeFSName(syncEntities, sep->d_name, sep->d_namlen);
-               free(nsrc);
+               deallocate(VPR(nsrc), false);
                continue;
             }
 
             // next destination path
             size_t ndl  = dl + sep->d_namlen;   // next destination length
-            char  *ndst = strcpy(malloc(ndl+2), dst); strcpy(ndst+dl, sep->d_name);
+            char  *ndst = strcpy(allocate(ndl+2, false), dst); strcpy(ndst+dl, sep->d_name);
 
             dstat.st_ino = 0;
             if (syncEntities &&                 // only non-NULL in incremental or synchronize mode
@@ -994,12 +988,11 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
                      if (S_ISREG(sstat.st_mode) && sstat.st_nlink > 1)
                      {
                         Node *ino = findINode(gHLinkINodes, sstat.st_ino);
-                        if (!ino || ino->value.v.i != sstat.st_dev)
+                        if (!ino || ino->value.i != sstat.st_dev)
                            storeINode(gHLinkINodes, sstat.st_ino, ndst, ndl, sstat.st_dev);
                      }
 
-                     free(ndst);
-                     free(nsrc);
+                     deallocate_batch(false, VPR(ndst), VPR(nsrc), NULL);
                      continue;
                   }
                }
@@ -1014,8 +1007,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
                   // If it cannot be deleted, it cannot be overwritten either.
                   // A message has already been dropped, and there is nothing
                   // good left to be done here, so skip this one.
-                  free(ndst);
-                  free(nsrc);
+                  deallocate_batch(false, VPR(ndst), VPR(nsrc), NULL);
                   continue;
                }
             }
@@ -1026,7 +1018,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
             {
                case S_IFDIR:      // A directory.
                   if (((dstat.st_ino != 0 || lstat(ndst, &dstat) == NO_ERROR) && S_ISDIR(dstat.st_mode)
-                     || dstat.st_ino == 0 && (dirCreated = (mkdir(ndst, modperms(sstat.st_mode)) == NO_ERROR)) && lstat(ndst, &dstat) == NO_ERROR)
+                     || dstat.st_ino == 0 && (dirCreated = (mkdir(ndst, sstat.st_mode&ALLPERMS | S_IWUSR) == NO_ERROR)) && lstat(ndst, &dstat) == NO_ERROR)
                      && dstat.st_dev == gDestinDev)
                   {
                      if (dirCreated)
@@ -1052,8 +1044,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
                      printf("\nDestination directory %s could not be created: %s.\n", ndst, errorString);
                   }
 
-                  free(ndst);
-                  free(nsrc);
+                  deallocate_batch(false, VPR(ndst), VPR(nsrc), NULL);
                   break;
 
                case S_IFREG:      // A regular file.
@@ -1065,7 +1056,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
                         fileCopyScheduler(fileID, nsrc, ndst, &sstat);
                      }
 
-                     else
+                     else // (sstat.st_size == 0)
                      {
                         if ((rc = fileEmpty(nsrc, ndst, &sstat)) != NO_ERROR)
                         {
@@ -1113,8 +1104,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
                special:
                   if (gVerbosityLevel > 0)
                      printf("\n%s is %s, and it is not copied.\n", nsrc, ftype);
-                  free(ndst);
-                  free(nsrc);
+                  deallocate_batch(false, VPR(ndst), VPR(nsrc), NULL);
                   break;
             }
          }
@@ -1133,7 +1123,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
             for (i = 1; i <= n; i++)
                if (syncEntities[i])
                   deleteEntityTree(syncEntities[i], dst, dl);
-            free(syncEntities);
+            deallocate(VPR(syncEntities), false);
          }
       }
 
@@ -1199,7 +1189,7 @@ void usage(const char *executable)
    while (--r >= executable && *r != '/')
       ;
    r++;
-   printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2014 - %s\n\n", version);
+   printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2015 - %s\n\n", version);
    printf("\
 Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-v level] [-x exclude-list] [-X excl-list-file] [-y] [-h|-?|?] source/ destination/\n\n\
        -c roff|woff|rwoff  Selectively turn off the file system cache for reading or writing\n\
@@ -1228,6 +1218,8 @@ Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-v level] [-x exclude-list] [-X excl-
                            does not exist, then it will be created. The final '/' may be omitted.\n\n", r);
 }
 
+
+extern ssize_t gAllocationTotal;
 
 int main(int argc, char *const argv[])
 {
@@ -1399,7 +1391,7 @@ int main(int argc, char *const argv[])
       *(short *)&dst[dl++] = *(short *)"/";
 
    if (gVerbosityLevel)
-      printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2014 - %s\nclone %s %s\n", version, src, dst);
+      printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2015 - %s\nclone %s %s\n", version, src, dst);
 
    // 2. check whether the paths do exist, lead to directories, and make sure that destination is not inherited by source
    bool   dirCreated = false;
@@ -1459,7 +1451,7 @@ int main(int argc, char *const argv[])
          gQItemDispenser[i].stage = virgin;
 
       pthread_attr_init(&thread_attrib);
-      pthread_attr_setstacksize(&thread_attrib, 1048576);
+      pthread_attr_setstacksize(&thread_attrib, 8*1048576);
       pthread_attr_setdetachstate(&thread_attrib, PTHREAD_CREATE_DETACHED);
 
       if (rc = pthread_create(&reader_thread, &thread_attrib, reader, NULL))
@@ -1504,6 +1496,8 @@ int main(int argc, char *const argv[])
          }
          else
             printf("\nNo items copied.\n");
+
+         printf("Leaked memory: %zd bytes\n", gAllocationTotal);
 
          switch (gErrorCount)
          {
