@@ -2,7 +2,7 @@
 //  clone
 //
 //  Created by Dr. Rolf Jansen on 2013-01-13.
-//  Copyright (c) 2013-2014. All rights reserved.
+//  Copyright (c) 2013-2015. All rights reserved.
 //
 //  Redistribution and use in source and binary forms, with or without modification,
 //  are permitted provided that the following conditions are met:
@@ -27,8 +27,8 @@
 #define errStrLen   256
 
 #define  NO_ERROR   0
-#define SRC_ERROR   -errno       // negative errors indicate a problem with the source.
-#define DST_ERROR   +errno       // positive errors indicate a problem with the destination.
+#define SRC_ERROR  -errno  // negative errors indicate a problem with the source.
+#define DST_ERROR  +errno  // positive errors indicate a problem with the destination.
 
 
 #define ENQUOTING(cvar) #cvar
@@ -44,6 +44,25 @@ typedef unsigned long      ulong;
 
 typedef long long          llong;
 typedef unsigned long long ullong;
+
+
+// void pointer reference
+#define VPR(p) (void **)&(p)
+
+typedef struct
+{
+   ssize_t size;
+   size_t  check;
+   char    payload[16];
+// size_t  zerowall;       // the allocation routines allocate sizeof(size_t) extra space and set this to zero
+} allocation;
+
+#define allocationMetaSize (offsetof(allocation, payload) - offsetof(allocation, size))
+
+void *allocate(ssize_t size, bool cleanout);
+void *reallocate(void *p, ssize_t size, bool cleanout, bool free_on_error);
+void deallocate(void **p, bool cleanout);
+void deallocate_batch(bool cleanout, ...);
 
 
 void setTimesFlags(const char *dst, struct stat *st);
@@ -77,7 +96,7 @@ typedef struct ExtAttrs
 
    typedef struct
    {
-      exa_t  exa[2]; // FreeBSD got 2 name spaces for extended attributes: system and user
+      exa_t exa[2];  // FreeBSD got 2 name spaces for extended attributes: system and user
       acl_t acl[2];  // FreeBSD knows 3 types of ACLs: (Access|NFSv4) and default
    } ExtMetaData;
 
@@ -93,7 +112,7 @@ void freeMetaData(ExtMetaData *xmd);
 #pragma mark ••• Value Data Types •••
 
 // Data Types in the key/name-value store -- negative values are dynamic.
-enum 
+enum
 {
    dynamic    = -1,  // multiply kind with -1 if the data has been dynamically allocated
    Empty      =  0,  // the key is the data
@@ -101,34 +120,40 @@ enum
    Data       =  2,  // any kind of structured or unstructured data
    String     =  3,  // a nul terminated string
    Dictionary =  5,  // a dictionary table, i.e. another key/name-value store
+   Other      =  6   // a function pointer to a proprietary deallocate() function is given within the value struct
 };
 
 typedef struct
 {
-   llong    kind;    // negative kinds indicate dynamically allocated data
+   // the payload
    union
    {
       bool    b;     // a boolean value
       llong   i;     // an integer
       double  d;     // a floating point number
       time_t  t;     // a time stamp
+
       char   *s;     // a string
       void   *p;     // a pointer to anything
-   } v;
-} Value;
+   };
 
-void releaseValue(Value *value);
+   // negative kinds indicate dynamically allocated data
+   llong   kind;
+
+   // propriatary deallocate() function
+   void (*deallocate)(void **p, bool cleanout);
+} Value;
 
 
 typedef struct Node
 {
    // keys
-   ullong key;       // if this is zero, then
-   char  *name;      // use name as the key.
+   ullong  key;      // if this is zero, then
+   char   *name;     // use name as the key.
    ssize_t naml;     // char length of the name
 
    // value
-   Value  value;
+   Value   value;
 
    // house holding
    int          B;
@@ -149,10 +174,10 @@ void   releaseTree(Node *node);
 Node **createTable(uint n);
 void  releaseTable(Node *table[]);
 
-Node    *findINode(Node *table[], ullong key);
-Node   *storeINode(Node *table[], ullong key, const char *fsname, ssize_t naml, llong dev);
-void   removeINode(Node *table[], ullong key);
-
 Node   *findFSName(Node *table[], const char *fsname, ssize_t naml);
 Node  *storeFSName(Node *table[], const char *fsname, ssize_t naml, Value *value);
 void  removeFSName(Node *table[], const char *fsname, ssize_t naml);
+
+Node    *findINode(Node *table[], ullong key);
+Node   *storeINode(Node *table[], ullong key, const char *fsname, ssize_t naml, llong dev);
+void   removeINode(Node *table[], ullong key);

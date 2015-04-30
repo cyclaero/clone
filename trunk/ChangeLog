@@ -1,10 +1,23 @@
 This is the ChangeLog of the clone project
 
 Created by Dr. Rolf Jansen on 2013-02-19.
-Copyright (c) 2013. All rights reserved.
+Copyright (c) 2013-2015. All rights reserved.
 
 Note: Milestones are embraced with ••••
 
+
+2015-04-29 22:45  rj - r65
+
+   * utils.h, utils.c, clone.c, clone.1, Makefile, clone.xcodeproj
+     - use allocate()/deallocate() memory functions.
+     - in setMetaData() and freeMetaData(), bug fix for FreeBSD,
+       a pointer with offset by 1 (namelist) was passed to free.
+     - merged in changes from the other AVL Tree implementations.
+     - replace sequencial deallocate() calls by a deallocate_batch() call.
+     - add a notice about eventually leaked memory to the summary.
+     - on Mac OS X, fixed problem with flistxattr(), fgetxattr(), and fsetxattr().
+     - set Mac OS X Deployment Target to 10.6.
+     - bumped copyright years.
 
 2014-12-12 23:08  rj - r64
 
