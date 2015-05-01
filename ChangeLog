@@ -6,6 +6,15 @@ Copyright (c) 2013-2015. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
+•••• 2015-05-01 -- Created a snapshot of r66 for release as v1.0.6, stored it on Google Drive and submitted it to FreeBSD Ports ••••
+
+
+2015-05-01 14:47  rj - r66
+
+   * utils.c, clone.c
+     - in utils.c switched sequences of deallocate() to deallocate_batch().
+     - release of version 1.0.6 (r66).
+
 2015-04-29 22:45  rj - r65
 
    * utils.h, utils.c, clone.c, clone.1, Makefile, clone.xcodeproj
