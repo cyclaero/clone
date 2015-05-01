@@ -70,7 +70,7 @@ extern int *gDestinFSType;
    void getMetaData(int fd, const char *src, struct stat *st, ExtMetaData *xmd)
    {
       // Reading extended attributes
-      exa_t   xa0 = NULL, *xan = &xa0, xa;
+      exa_t   xa, xa0 = NULL, *xan = &xa0;
       ssize_t listsize = (fd != -1) ? flistxattr(fd, NULL, 0, XATTR_SHOWCOMPRESSION)
                                     : listxattr(src, NULL, 0, XATTR_SHOWCOMPRESSION|XATTR_NOFOLLOW);
       if (listsize > 0)
@@ -98,7 +98,7 @@ extern int *gDestinFSType;
                else
                   value = NULL;
 
-            xa = *xan = allocate(sizeof(ExtAttrs), true);
+            xa = *xan = allocate(sizeof(ExtAttrs), false);
             xa->name  = name;
             xa->value = value;
             xa->size  = size;
@@ -112,7 +112,8 @@ extern int *gDestinFSType;
       xmd->exa = xa0;
 
       // Reading the ACLs
-      xmd->acl = (fd != -1) ? acl_get_fd_np(fd, ACL_TYPE_EXTENDED) : acl_get_link_np(src, ACL_TYPE_EXTENDED);
+      xmd->acl = (fd != -1) ? acl_get_fd_np(fd, ACL_TYPE_EXTENDED)
+                            : acl_get_link_np(src, ACL_TYPE_EXTENDED);
    }
 
    void setMetaData(int fd, const char *dst, ExtMetaData *xmd)
@@ -129,10 +130,9 @@ extern int *gDestinFSType;
                fsetxattr(fd, xa->name, xa->value, xa->size, 0, 0x0000);
             else
                setxattr(dst, xa->name, xa->value, xa->size, 0, XATTR_NOFOLLOW);
-            deallocate(VPR(xa->value), false);
-            void *fxa = xa;
-            xa = xa->next;
-            deallocate(VPR(fxa), false);
+            exa_t fxa = xa; xa = xa->next;
+            deallocate_batch(false, VPR(fxa->value),
+                                    VPR(fxa), NULL);
          }
          deallocate(VPR(namelist), false);
       }
@@ -158,10 +158,9 @@ extern int *gDestinFSType;
 
          while (xa)
          {
-            deallocate(VPR(xa->value), false);
-            void *fxa = xa;
-            xa = xa->next;
-            deallocate(VPR(fxa), false);
+            exa_t fxa = xa; xa = xa->next;
+            deallocate_batch(false, VPR(fxa->value),
+                                    VPR(fxa), NULL);
          }
          deallocate(VPR(namelist), false);
       }
@@ -211,8 +210,9 @@ extern int *gDestinFSType;
       // here we define system = 0 and user = 1)
       for (int i = 0; i < 2; i++)
       {
-         int     ans = (i == 0) ? EXTATTR_NAMESPACE_SYSTEM : EXTATTR_NAMESPACE_USER;
-         exa_t   xa0 = NULL, *xan = &xa0, xa;
+         int     ans = (i == 0) ? EXTATTR_NAMESPACE_SYSTEM
+                                : EXTATTR_NAMESPACE_USER;
+         exa_t   xa, xa0 = NULL, *xan = &xa0;
          ssize_t listsize = ((fd != -1) ? extattr_list_fd(fd, ans, NULL, 0)
                                         : extattr_list_link(src, ans, NULL, 0)) + 1; // the extracted list is not nul terminated, so leave space for the extra nul
          if (listsize > 1)
@@ -242,7 +242,7 @@ extern int *gDestinFSType;
                   else
                      value = NULL;
 
-               xa = *xan = allocate(sizeof(ExtAttrs), true);
+               xa = *xan = allocate(sizeof(ExtAttrs), false);
                xa->name  = (char *)name;
                xa->value = value;
                xa->size  = size;
@@ -337,10 +337,9 @@ extern int *gDestinFSType;
                   extattr_set_fd(fd, ans, xa->name, xa->value, xa->size);
                else
                   extattr_set_link(dst, ans, xa->name, xa->value, xa->size);
-               deallocate(VPR(xa->value), false);
-               void *fxa = xa;
-               xa = xa->next;
-               deallocate(VPR(fxa), false);
+               exa_t fxa = xa; xa = xa->next;
+               deallocate_batch(false, VPR(fxa->value),
+                                       VPR(fxa), NULL);
             }
             deallocate(VPR(namelist), false);
          }
@@ -373,10 +372,9 @@ extern int *gDestinFSType;
 
             while (xa)
             {
-               deallocate(VPR(xa->value), false);
-               void *fxa = xa;
-               xa = xa->next;
-               deallocate(VPR(fxa), false);
+               exa_t fxa = xa; xa = xa->next;
+               deallocate_batch(false, VPR(fxa->value),
+                                       VPR(fxa), NULL);
             }
             deallocate(VPR(namelist), false);
          }

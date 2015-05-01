@@ -25,7 +25,7 @@
 
 /*
    ToDo:
-   - for backups to remote read-only stores, fetch a copy of the remote file tree.
+   - for backups of remote read-only stores, fetch a copy of the remote file tree.
    - add a command line option for forcing uid:gid+flags.
 */
 
@@ -51,7 +51,7 @@
 #include "utils.h"
 
 
-static const char *version = "Version 1.0.6b (r"STRINGIFY(SVNREV)")";
+static const char *version = "Version 1.0.6 (r"STRINGIFY(SVNREV)")";
 
 // Device and file system informations
 int   *gSourceFSType;
