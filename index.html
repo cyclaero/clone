@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <meta name="description" content="Clone : A file tree cloning tool">
+
+    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
+
+    <title>Clone</title>
+  </head>
+
+  <body>
+
+    <!-- HEADER -->
+    <div id="header_wrap" class="outer">
+        <header class="inner">
+          <a id="forkme_banner" href="https://github.com/cyclaero/clone">View on GitHub</a>
+
+          <h1 id="project_title">Clone</h1>
+          <h2 id="project_tagline">A file tree cloning tool</h2>
+
+            <section id="downloads">
+              <a class="zip_download_link" href="https://github.com/cyclaero/clone/zipball/master">Download this project as a .zip file</a>
+              <a class="tar_download_link" href="https://github.com/cyclaero/clone/tarball/master">Download this project as a tar.gz file</a>
+            </section>
+        </header>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main_content_wrap" class="outer">
+      <section id="main_content" class="inner">
+        <p><strong>clone</strong> is a file tree cloning tool which runs 3 threads - a scheduler (main), a reader,
+and a writer thread. Reading and writing occurs in parallel. While this is most beneficial
+for copying data from one physical disk to another, clone is also very well suited
+for cloning a file tree to any place on the same disk.</p>
+
+<p>Cloning includes the whole directory hierarchy, i.e. sub-directories, files, hard links,
+symbolic links, attributes (modes, flags, times), extended attributes and access control lists.</p>
+
+<p><strong>clone</strong> is useful for cloning (thus backing-up) live file systems, and it can also be used in
+incremental and synchonization mode.</p>
+
+<p><strong>clone</strong> works on FreeBSD and Mac OS X.</p>
+
+<p><strong>clone</strong> is very fast, for example, cloning a whole UFS2 file hierarchy on FreeBSD 9.1 of in total
+2.3 TBytes of data from one hard disk to another took 7.5 h, so the average transfer rate
+for all kind of files (very small up to very big ones) was about 89 MByte/s.</p>
+
+<p>Snapshots can be downloaded from the <strong>clone Google Drive</strong></p>
+
+<p>     <a href="https://drive.google.com/folderview?id=0BzyUSAiURzitVGlOeXFsTW9XOVk">https://drive.google.com/folderview?id=0BzyUSAiURzitVGlOeXFsTW9XOVk</a></p>
+
+<p>The latest snapshot is <strong>clone-1.0.6.tar.gz</strong>
+(SHA256 = 0ed5d2ca266b42924f7ef9495fccae235a0d5665c1b5a16cf6d86214f3d35ed2):</p>
+
+<p>     <a href="https://googledrive.com/host/0BzyUSAiURzitVGlOeXFsTW9XOVk/clone-1.0.6.tar.gz">https://googledrive.com/host/0BzyUSAiURzitVGlOeXFsTW9XOVk/clone-1.0.6.tar.gz</a></p>
+
+<hr>
+
+<p>On my <a href="http://blog.obsigna.net/">BLog</a>, I posted an article in German language on how to employ <strong>clone</strong> for the <a href="http://blog.obsigna.net/?p=475">Backup Strategy of a FreeBSD Home Server</a>. Please use the <a href="https://translate.google.com/translate?sl=de&amp;tl=en&amp;js=y&amp;prev=_t&amp;hl=de&amp;ie=UTF-8&amp;u=http%3A%2F%2Fblog.obsigna.net%2F%3Fp%3D475&amp;edit-text=">Google Translator</a> in order to translate said BLog post into your favorite language.</p>
+      </section>
+    </div>
+
+    <!-- FOOTER  -->
+    <div id="footer_wrap" class="outer">
+      <footer class="inner">
+        <p class="copyright">Clone maintained by <a href="https://github.com/cyclaero">cyclaero</a></p>
+        <p>Published with <a href="https://pages.github.com">GitHub Pages</a></p>
+      </footer>
+    </div>
+
+    
+
+  </body>
+</html>
