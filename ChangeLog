@@ -6,6 +6,12 @@ Copyright (c) 2013-2015. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
+2015-09-17 17:07  rj
+
+   * .gitignore
+     - moved project to GitHub
+
+
 •••• 2015-05-01 -- Created a snapshot of r66 for release as v1.0.6, stored it on Google Drive and submitted it to FreeBSD Ports ••••
 
 
