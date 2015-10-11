@@ -6,6 +6,11 @@ Copyright (c) 2013-2015. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
+2015-10-11 10:03  rj
+
+   * clone.c
+     - changed version to 1.0.7b.
+
 2015-10-11 09:35  rj
 
    * utils.h, utils.c, clone.c, clone.1
