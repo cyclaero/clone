@@ -57,7 +57,10 @@
 				7EDC0F1216D3885F00B6DB4A /* ChangeLog */,
 				7E48627016A345CA008E0F01 /* Products */,
 			);
+			indentWidth = 3;
 			sourceTree = "<group>";
+			tabWidth = 3;
+			usesTabs = 0;
 		};
 		7E48627016A345CA008E0F01 /* Products */ = {
 			isa = PBXGroup;

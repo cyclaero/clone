@@ -6,10 +6,17 @@ Copyright (c) 2013-2015. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
+2015-10-11 09:35  rj
+
+   * utils.h, utils.c, clone.c, clone.1
+     - corrected spelling in the man page.
+     - added some missing end of line chars to respective error messages.
+     - compiler on Mac OS X 10.6.8 don't support anonymous unions, in order to support older machines, name the payload union of the value struct.
+
 2015-09-17 17:07  rj
 
    * .gitignore
-     - moved project to GitHub
+     - moved project to GitHub.
 
 
 •••• 2015-05-01 -- Created a snapshot of r66 for release as v1.0.6, stored it on Google Drive and submitted it to FreeBSD Ports ••••

@@ -659,7 +659,7 @@ int hlnkCopy(char *src, char *dst, size_t dl, struct stat *st)
    int   rc;
    Node *ino = findINode(gHLinkINodes, st->st_ino);
 
-   if (ino && ino->value.i == st->st_dev)
+   if (ino && ino->value.pl.i == st->st_dev)
    {
       chflags(ino->name, 0);
       rc = (link(ino->name, dst) == NO_ERROR) ? 0 : DST_ERROR;
@@ -872,7 +872,7 @@ int deleteEntityTree(Node *syncNode, const char *path, size_t pl)
 
    size_t npl   = pl + strlen(syncNode->name);
    char  *npath = strcpy(allocate(npl+2, false), path); strcpy(npath+pl, syncNode->name);
-   rc = deleteDirEntity(npath, npl, syncNode->value.i);
+   rc = deleteDirEntity(npath, npl, syncNode->value.pl.i);
 
    deallocate_batch(false, VPR(npath), VPR(syncNode->name), VPR(syncNode), NULL);
    return (rcL != NO_ERROR)
@@ -905,7 +905,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
          {
             if (dep->d_type == DT_DIR || dep->d_type == DT_REG || dep->d_type == DT_LNK)
             {
-               value.i = dtType2stFmt(dep->d_type);
+               value.pl.i = dtType2stFmt(dep->d_type);
                storeFSName(syncEntities, dep->d_name, dep->d_namlen, &value);
             }
 
@@ -915,7 +915,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
                if (lstat(path, &dstat) != -1 &&
                    ((dstat.st_mode &= S_IFMT) == S_IFDIR || dstat.st_mode == S_IFREG || dstat.st_mode == S_IFLNK))
                {
-                  value.i = dstat.st_mode;
+                  value.pl.i = dstat.st_mode;
                   storeFSName(syncEntities, dep->d_name, dep->d_namlen, &value);
                }
             }
@@ -988,7 +988,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
                      if (S_ISREG(sstat.st_mode) && sstat.st_nlink > 1)
                      {
                         Node *ino = findINode(gHLinkINodes, sstat.st_ino);
-                        if (!ino || ino->value.i != sstat.st_dev)
+                        if (!ino || ino->value.pl.i != sstat.st_dev)
                            storeINode(gHLinkINodes, sstat.st_ino, ndst, ndl, sstat.st_dev);
                      }
 
@@ -1153,7 +1153,7 @@ bool intersectPaths(char *src, char *dst)
          size_t srl = strlen(srp);
          size_t drl = strlen(drp);
          if (chk = (strstr(drp, srp) == drp && (srl == drl || drp[srl] == '/')))
-            printf("Absolute destination %s must not be a child of the source path %s.", drp, srp);
+            printf("Absolute destination %s must not be a child of the source path %s.\n", drp, srp);
          free(drp);
          free(srp);
       }
@@ -1161,11 +1161,11 @@ bool intersectPaths(char *src, char *dst)
       else
       {
          free(srp);
-         printf("Destination path %s is invalid.", dst);
+         printf("Destination path %s is invalid.\n", dst);
       }
 
    else
-      printf("Source path %s is invalid.", src);
+      printf("Source path %s is invalid.\n", src);
 
    return chk;
 }
@@ -1456,13 +1456,13 @@ int main(int argc, char *const argv[])
 
       if (rc = pthread_create(&reader_thread, &thread_attrib, reader, NULL))
       {
-         printf("Cannot create file reader thread: %s.", strerror(rc));
+         printf("Cannot create file reader thread: %s.\n", strerror(rc));
          return 1;
       }
 
       if (rc = pthread_create(&writer_thread, &thread_attrib, writer, NULL))
       {
-         printf("Cannot create file writer thread: %s.",  strerror(rc));
+         printf("Cannot create file writer thread: %s.\n",  strerror(rc));
          return 1;
       }
 

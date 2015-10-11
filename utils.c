@@ -537,20 +537,20 @@ static inline void releaseValue(Value *value)
    {
       case Simple:
       case Data:
-         deallocate(VPR(value->p), false);
+         deallocate(VPR(value->pl.p), false);
          break;
 
       case String:
-         deallocate(VPR(value->s), false);
+         deallocate(VPR(value->pl.s), false);
          break;
 
       case Dictionary:
-         releaseTable((Node **)value->p);
+         releaseTable((Node **)value->pl.p);
          break;
 
       case Other:
          if (value->deallocate)
-            value->deallocate(VPR(value->p), false);
+            value->deallocate(VPR(value->pl.p), false);
          break;
    }
 }

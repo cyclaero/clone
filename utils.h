@@ -135,7 +135,7 @@ typedef struct
 
       char   *s;     // a string
       void   *p;     // a pointer to anything
-   };
+   } pl;
 
    // negative kinds indicate dynamically allocated data
    llong   kind;
