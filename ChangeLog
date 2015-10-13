@@ -6,19 +6,24 @@ Copyright (c) 2013-2015. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
-2015-10-11 10:03  rj
+2015-10-12 21:09  rj - r70
+
+   * clone.c
+     - improved check for path intersection.
+
+2015-10-11 10:03  rj - r69
 
    * clone.c
      - changed version to 1.0.7b.
 
-2015-10-11 09:35  rj
+2015-10-11 09:35  rj - r68
 
    * utils.h, utils.c, clone.c, clone.1
      - corrected spelling in the man page.
      - added some missing end of line chars to respective error messages.
      - compiler on Mac OS X 10.6.8 don't support anonymous unions, in order to support older machines, name the payload union of the value struct.
 
-2015-09-17 17:07  rj
+2015-09-17 17:07  rj - r67
 
    * .gitignore
      - moved project to GitHub.

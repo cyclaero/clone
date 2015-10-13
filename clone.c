@@ -1142,32 +1142,28 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
 
 #pragma mark ••• Main •••
 
-bool intersectPaths(char *src, char *dst)
+bool checkIntersection(char *src, char *dst)
 {
-   bool  chk = true;    // assume intersection
-   char *srp, *drp;
+   char srp[PATH_MAX], drp[PATH_MAX];
 
-   if (srp = realpath(src, NULL))
-      if (drp = realpath(dst, NULL))
+   if (realpath(src, srp))
+      if (realpath(dst, drp))
       {
          size_t srl = strlen(srp);
          size_t drl = strlen(drp);
-         if (chk = (strstr(drp, srp) == drp && (srl == drl || drp[srl] == '/')))
-            printf("Absolute destination %s must not be a child of the source path %s.\n", drp, srp);
-         free(drp);
-         free(srp);
+         if (strstr(drp, srp) == drp && (srl == drl || drp[srl] == '/' || srl == 1 && *drp == '/'))
+            printf("Absolute destination '%s' must not be a child of the source path '%s'.\n", drp, srp);
+         else
+            return false;
       }
 
       else
-      {
-         free(srp);
          printf("Destination path %s is invalid.\n", dst);
-      }
 
    else
       printf("Source path %s is invalid.\n", src);
 
-   return chk;
+   return true;  // path intersection or path error
 }
 
 
@@ -1411,9 +1407,9 @@ int main(int argc, char *const argv[])
    else if (!dirCreated && !S_ISDIR(dstat.st_mode))
       printf("Destination %s is not a directory.\n", argv[1]);
 
-   else if (sstat.st_dev == dstat.st_dev && intersectPaths(src, dst))
+   else if (sstat.st_dev == dstat.st_dev && checkIntersection(src, dst))
    {
-      // exact failure message has been output in intersectPaths()
+      // exact failure message has been output in checkIntersection()
       if (dirCreated)
          rmdir(dst);
    }
