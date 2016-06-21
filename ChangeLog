@@ -1,10 +1,18 @@
 This is the ChangeLog of the clone project
 
 Created by Dr. Rolf Jansen on 2013-02-19.
-Copyright (c) 2013-2015. All rights reserved.
+Copyright (c) 2013-2016. All rights reserved.
 
 Note: Milestones are embraced with ••••
 
+
+2016-06-21 10:43  rj - r71
+
+   * utils.h, utils.c, clone.c, clone.1, Makefile
+     - added option to create a cloned directory tree containing hard links to the original content.
+     - bumped year of the copyright notice.
+     - updated link to the original code of MurmurHash3.
+     - fixed a memory leak.
 
 2015-10-12 21:09  rj - r70
 

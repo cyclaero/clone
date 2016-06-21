@@ -2,7 +2,7 @@
 //  clone
 //
 //  Created by Dr. Rolf Jansen on 2013-01-13.
-//  Copyright (c) 2013-2015. All rights reserved.
+//  Copyright (c) 2013-2016. All rights reserved.
 //
 //  Redistribution and use in source and binary forms, with or without modification,
 //  are permitted provided that the following conditions are met:
@@ -69,6 +69,7 @@ bool   gReadNoCache    = false;
 bool   gWriteNoCache   = false;
 bool   gIncremental    = false;
 bool   gSynchronize    = false;
+bool   gHardLinking    = false;
 
 llong  gWriterLast     = 0;
 llong  gTotalItems     = 0;
@@ -490,6 +491,18 @@ void *writer(void *threadArg)
             else
             {
                gErrorCount++;
+               recycleFinishedChunk(chunk);
+
+               while (state != final)
+               {
+                  pthread_mutex_lock(&writer_mutex);
+                  while (!(chunk = informCurrentChunk()))
+                     pthread_cond_wait_flag(&writer_cond, &writer_mutex, &gWriterWaitFlag);
+                  pthread_mutex_unlock(&writer_mutex);
+
+                  state = chunk->state;
+                  recycleFinishedChunk(chunk);
+               }
                strerror_r(abs(rc = DST_ERROR), errorString, errStrLen);
                printf("\nWrite error on file %s: %s.\n", qitem->dst, errorString);
             }
@@ -657,19 +670,30 @@ int atomCopy(char *src, char *dst, struct stat *st)
 int hlnkCopy(char *src, char *dst, size_t dl, struct stat *st)
 {
    int   rc;
-   Node *ino = findINode(gHLinkINodes, st->st_ino);
 
-   if (ino && ino->value.pl.i == st->st_dev)
+   if (!gHardLinking)
    {
-      chflags(ino->name, 0);
-      rc = (link(ino->name, dst) == NO_ERROR) ? 0 : DST_ERROR;
-      gTotalItems++;
+      Node *ino = findINode(gHLinkINodes, st->st_ino);
+
+      if (ino && ino->value.pl.i == st->st_dev)
+      {
+         chflags(ino->name, 0);
+         rc = (link(ino->name, dst) == NO_ERROR) ? 0 : DST_ERROR;
+         gTotalItems++;
+      }
+
+      else
+      {
+         storeINode(gHLinkINodes, st->st_ino, dst, dl, st->st_dev);
+         rc = atomCopy(src, dst, st);
+      }
    }
 
    else
    {
-      storeINode(gHLinkINodes, st->st_ino, dst, dl, st->st_dev);
-      rc = atomCopy(src, dst, st);
+      chflags(src, 0);
+      rc = (link(src, dst) == NO_ERROR) ? 0 : DST_ERROR;
+      gTotalItems++;
    }
 
    if (rc == NO_ERROR)
@@ -1048,7 +1072,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
                   break;
 
                case S_IFREG:      // A regular file.
-                  if (sstat.st_nlink == 1)
+                  if (sstat.st_nlink == 1 && !gHardLinking)
                      if (sstat.st_size > 0)
                      {
                         fCount++;
@@ -1066,7 +1090,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
                         }
                      }
 
-                  else // (sstat.st_nlink > 1)
+                  else // (sstat.st_nlink > 1 ||  && gHardLinking)
                      if ((rc = hlnkCopy(nsrc, ndst, ndl, &sstat)) != NO_ERROR)
                      {
                         gErrorCount++;
@@ -1158,10 +1182,10 @@ bool checkIntersection(char *src, char *dst)
       }
 
       else
-         printf("Destination path %s is invalid.\n", dst);
+         printf("Destination path '%s' is invalid.\n", dst);
 
    else
-      printf("Source path %s is invalid.\n", src);
+      printf("Source path '%s' is invalid.\n", src);
 
    return true;  // path intersection or path error
 }
@@ -1195,6 +1219,7 @@ Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-v level] [-x exclude-list] [-X excl-
                            remove the destination directory or mount point itself. Stop on error.\n\n\
        -i                  Incrementally add new content to or change content in the destination,\n\
                            but do not touch content in destination that does not exist in source.\n\n\
+       -l                  Don't copy, but create hard links of regular files in the cloned directory tree.\n\n\
        -s                  Completely synchronize destination with source.\n\n\
        -v level            Verbosity level (default = 1):\n\
                            0 - no output\n\
@@ -1222,11 +1247,11 @@ int main(int argc, char *const argv[])
    int    optchr, vLevel;
    size_t homelen = 0;
    char   ch, *o, *p, *q, *usrhome = "", *cmd = argv[0];
-   bool   d_flag = false, i_flag = false, s_flag = false, y_flag = false;
+   bool   d_flag = false, i_flag = false, l_flag = false, s_flag = false, y_flag = false;
    FILE  *exclf;
    struct stat exclst;
 
-   while ((optchr = getopt(argc, argv, "c:disv:x:X:yh?")) != -1)
+   while ((optchr = getopt(argc, argv, "c:dilsv:x:X:yh?")) != -1)
       switch (optchr)
       {
          case 'c':   // selectively turn off the file system cache for reading or writing or for reading and writing
@@ -1248,14 +1273,21 @@ int main(int argc, char *const argv[])
             break;
 
          case 'i':   // incrementally add new content to or change content in the destination
-            if (d_flag || s_flag)
+            if (d_flag || l_flag || s_flag)
                goto arg_err;
             else
                i_flag = gIncremental = true;
             break;
 
+         case 'l':   // create cloned file tree by hard lining the contents of the source
+            if (i_flag || s_flag)
+               goto arg_err;
+            else
+               l_flag = gHardLinking = true;
+            break;
+
          case 's':   // completely synchronize source and destination
-            if (d_flag || i_flag)
+            if (d_flag || i_flag || l_flag)
                goto arg_err;
             else
                s_flag = gSynchronize = true;
@@ -1486,12 +1518,12 @@ int main(int argc, char *const argv[])
             double t = t1.tv_sec - t0.tv_sec + (t1.tv_usec - t0.tv_usec)/1.0e6;
             gTotalSize /= 1048576.0;
             if (gTotalItems != 1)
-               printf("\n%llu items copied, %.1f MB in %.2f s -- %.1f MB/s\n", gTotalItems, gTotalSize, t, gTotalSize/t);
+               printf("\n%llu items %s, %.1f MB in %.2f s -- %.1f MB/s\n", gTotalItems, (!gHardLinking)?"copied":"linked", gTotalSize, t, gTotalSize/t);
             else
-               printf("\n1 item copied, %.1f MB in %.2f s -- %.1f MB/s\n", gTotalSize, t, gTotalSize/t);
+               printf("\n1 item %s, %.1f MB in %.2f s -- %.1f MB/s\n", (!gHardLinking)?"copied":"linked", gTotalSize, t, gTotalSize/t);
          }
          else
-            printf("\nNo items copied.\n");
+            printf("\nNo items copied or linked.\n");
 
          printf("Leaked memory: %zd bytes\n", gAllocationTotal);
 

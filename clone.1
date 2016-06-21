@@ -1,7 +1,7 @@
 .\" man file clone(1)
 .\"
 .\" Created by Dr. Rolf Jansen on 2013-01-13.
-.\" Copyright (c) 2013-2015. All rights reserved.
+.\" Copyright (c) 2013-2016. All rights reserved.
 .\"
 .\" Redistribution and use in source and binary forms, with or without modification,
 .\" are permitted provided that the following conditions are met:
@@ -65,6 +65,10 @@ Selectively turn off the file system cache for reading or writing or for reading
 Delete the contents of the destination before cloning, but do not remove the destination directory or mount point itself. Stop on error. Deletion requires user confirmation, unless it is confirmed inherently by the \fB-y\fP flag. Be careful, deletion cannot be undone! NOTE: It may take its time to empty hugh file trees, and it may be faster to use \fBnewfs(8)\fP for initializing big volumes.
 .It Fl i
 Incrementally add new content to or change content in the destination, but do not touch content in destination that does not exist in source.
+.It Fl l
+Don't copy, but create hard links of regular files in the cloned directory tree.
+.It Fl s
+Completely synchronize destination with source.
 .It Fl v
 Verbosity level (default = 1):
 .br
@@ -75,8 +79,6 @@ Verbosity level (default = 1):
 2 - indicate cloned files by '.'
 .br
 3 - display the path names of cloned file system items
-.It Fl s
-Completely synchronize destination with source.
 .It Fl x Ar exclude-list
 Colon separated list of entity names or full path names to be excluded from cloning. Use full path names to single out exactly one item. Use entity names for all existing entities having that name being excluded.
 .br
@@ -122,7 +124,7 @@ clone -x ".DS_Store:.AppleDouble:.AppleDesktop:.appdisk" /path/to/afpvol /path/t
 .Xr restore 8 ,
 .Xr asr 8
 .Sh AUTHOR
-.An Dr. Rolf Jansen. Copyright (c) 2013-2015. All rights reserved.
+.An Dr. Rolf Jansen. Copyright (c) 2013-2016. All rights reserved.
 .Sh IMPORTANT NOTE
 Improper use of
 .Nm
