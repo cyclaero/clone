@@ -478,6 +478,7 @@ void deallocate(void **p, bool cleanout)
    if (p && *p)
    {
       allocation *a = *p - allocationMetaSize;
+      *p = NULL;
 
       if (a->check == (a->size | (size_t)a) && *(ssize_t *)((void *)a + allocationMetaSize + a->size) == 0)
          a->check = 0;
@@ -491,8 +492,6 @@ void deallocate(void **p, bool cleanout)
       if (cleanout)
          bzero((void *)a, allocationMetaSize + a->size + sizeof(size_t));
       free(a);
-
-      *p = NULL;
    }
 }
 
@@ -506,6 +505,7 @@ void deallocate_batch(bool cleanout, ...)
       if (*p)
       {
          allocation *a = *p - allocationMetaSize;
+         *p = NULL;
 
          if (a->check == (a->size | (size_t)a) && *(ssize_t *)((void *)a + allocationMetaSize + a->size) == 0)
             a->check = 0;
@@ -519,8 +519,6 @@ void deallocate_batch(bool cleanout, ...)
          if (cleanout)
             bzero((void *)a, allocationMetaSize + a->size + sizeof(size_t));
          free(a);
-
-         *p = NULL;
       }
 
    va_end(vl);

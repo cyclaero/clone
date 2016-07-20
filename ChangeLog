@@ -6,6 +6,11 @@ Copyright (c) 2013-2016. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
+2016-07-20 09:47  rj - r72
+
+   * utils.c
+     - in the deoallocate routines set the passed pointer to NULL before actually freeing the memory.
+
 2016-06-21 10:43  rj - r71
 
    * utils.h, utils.c, clone.c, clone.1, Makefile
