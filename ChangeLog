@@ -1,10 +1,15 @@
 This is the ChangeLog of the clone project
 
 Created by Dr. Rolf Jansen on 2013-02-19.
-Copyright (c) 2013-2016. All rights reserved.
+Copyright (c) 2013-2017. All rights reserved.
 
 Note: Milestones are embraced with ••••
 
+
+2017-01-08 21:54  rj - r73
+
+   *utils.h, utils.c, Makefile
+   - adaptions for the ARM architecture.
 
 2016-07-20 09:47  rj - r72
 

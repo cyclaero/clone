@@ -23,6 +23,8 @@
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
+CC ?= clang
+
 .if exists(.svn)
 .ifmake update
 REVNUM != svn update > /dev/null; svnversion
@@ -34,8 +36,15 @@ SVNREV  = SVNREV="$(REVNUM)"
 SVNREV != cat svnrev.xcconfig
 .endif
 
-CC     ?= clang
-CFLAGS  = $(CDEFS) -D$(SVNREV) -O3 -std=c99 -Wno-switch -Wno-parentheses
+.if $(MACHINE) == "i386" || $(MACHINE) == "amd64"
+CFLAGS = $(CDEFS) -march=native
+.elif $(MACHINE) == "arm"
+CFLAGS = $(CDEFS) -fsigned-char
+.else
+CFLAGS = $(CDEFS)
+.endif
+
+CFLAGS += -D$(SVNREV) -g0 -Ofast -std=c11 -fno-common -fstrict-aliasing -Wno-switch -Wno-parentheses
 LDFLAGS = -lpthread
 
 HEADER  = utils.h
@@ -51,7 +60,7 @@ depend:
 $(TOOL): $(TOOLOBJ)
 	$(CC) $(TOOLOBJ) $(LDFLAGS) -o $@
 
-$(TOOLOBJ):
+$(TOOLOBJ): Makefile
 	$(CC) $(CFLAGS) $< -c -o $@
 
 clean:
