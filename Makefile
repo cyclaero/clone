@@ -36,7 +36,7 @@ SVNREV  = SVNREV="$(REVNUM)"
 SVNREV != cat svnrev.xcconfig
 .endif
 
-.if $(MACHINE) == "i386" || $(MACHINE) == "amd64"
+.if $(MACHINE) == "i386" || $(MACHINE) == "amd64" || $(MACHINE) == "x86_64"
 CFLAGS = $(CDEFS) -march=native
 .elif $(MACHINE) == "arm"
 CFLAGS = $(CDEFS) -fsigned-char
