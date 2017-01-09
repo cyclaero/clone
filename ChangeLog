@@ -6,6 +6,13 @@ Copyright (c) 2013-2017. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
+2017-01-08 22:40  rj - r77
+
+   *utils.h, utils.c, clone.c, clone.1, Makefile
+   - fixed spelling of the usage instructions.
+   - bumped copyright dates.
+   - svn revision was out of synch, the actual one is r77 now.
+
 2017-01-08 21:54  rj - r73
 
    *utils.h, utils.c, Makefile

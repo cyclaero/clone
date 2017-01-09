@@ -2,7 +2,7 @@
 //  clone
 //
 //  Created by Dr. Rolf Jansen on 2013-01-13.
-//  Copyright (c) 2013-2016. All rights reserved.
+//  Copyright (c) 2013-2017. All rights reserved.
 //
 //  Redistribution and use in source and binary forms, with or without modification,
 //  are permitted provided that the following conditions are met:
@@ -1234,8 +1234,8 @@ Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-v level] [-x exclude-list] [-X excl-
        -X excl-list-file   File containig a list of entity names or full path names to be excluded -- one item per line.\n\n\
        -y                  Automatically answer with y(es) to y|n confirmation prompts.\n\n\
        -h|-?|?             Show these usage instructions.\n\n\
-       source/             Path to the source directory or moint point. The final '/' may be omitted.\n\n\
-       destination/        Path to the destination directory or moint point. If the destination\n\
+       source/             Path to the source directory or mount point. The final '/' may be omitted.\n\n\
+       destination/        Path to the destination directory or mount point. If the destination\n\
                            does not exist, then it will be created. The final '/' may be omitted.\n\n", r);
 }
 
