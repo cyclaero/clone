@@ -6,9 +6,14 @@ Copyright (c) 2013-2017. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
+2017-02-19 19:03  rj - r78
+
+   * clone.c, clone.1
+   - exclude list was ignored in the case of destination items for whose the respective source item did not exist.
+
 2017-01-08 22:40  rj - r77
 
-   *utils.h, utils.c, clone.c, clone.1, Makefile
+   * utils.h, utils.c, clone.c, clone.1, Makefile
    - fixed spelling of the usage instructions.
    - bumped copyright dates.
    - svn revision was out of synch, the actual one is r77 now.

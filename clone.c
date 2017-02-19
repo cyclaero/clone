@@ -896,7 +896,7 @@ int deleteEntityTree(Node *syncNode, const char *path, size_t pl)
 
    size_t npl   = pl + strlen(syncNode->name);
    char  *npath = strcpy(allocate(npl+2, false), path); strcpy(npath+pl, syncNode->name);
-   rc = deleteDirEntity(npath, npl, syncNode->value.pl.i);
+      rc = deleteDirEntity(npath, npl, syncNode->value.pl.i);
 
    deallocate_batch(false, VPR(npath), VPR(syncNode->name), VPR(syncNode), NULL);
    return (rcL != NO_ERROR)
@@ -916,7 +916,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
    DIR           *sdp, *ddp;
    struct dirent *sep, *dep, bep;
 
-   // In incremental or sysnchronize mode, store the inventory of
+   // In incremental or synchronize mode, store the inventory of
    // the destination directory into the key-name/value store.
    Node *syncNode, **syncEntities = NULL;
    if ((gIncremental || gSynchronize) && (ddp = opendir(dst)))
@@ -927,22 +927,24 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
          if ( dep->d_name[0] != '.' || (dep->d_name[1] != '\0' &&
              (dep->d_name[1] != '.' ||  dep->d_name[2] != '\0')))
          {
-            if (dep->d_type == DT_DIR || dep->d_type == DT_REG || dep->d_type == DT_LNK)
-            {
-               value.pl.i = dtType2stFmt(dep->d_type);
-               storeFSName(syncEntities, dep->d_name, dep->d_namlen, &value);
-            }
-
-            else if (dep->d_type == DT_UNKNOWN)    // need to call lstat()
-            {
-               char path[dl+dep->d_namlen+1]; strcpy(path, dst); strcpy(path+dl, dep->d_name);
-               if (lstat(path, &dstat) != -1 &&
-                   ((dstat.st_mode &= S_IFMT) == S_IFDIR || dstat.st_mode == S_IFREG || dstat.st_mode == S_IFLNK))
+            size_t fpl = dl+dep->d_namlen;
+            char fullp[fpl+1]; strcpy(fullp, dst); strcpy(fullp+dl, dep->d_name);
+            if (!gExcludeList || !findFSName(gExcludeList, dep->d_name, dep->d_namlen) && !findFSName(gExcludeList, fullp, fpl))
+               if (dep->d_type == DT_DIR || dep->d_type == DT_REG || dep->d_type == DT_LNK)
                {
-                  value.pl.i = dstat.st_mode;
+                  value.pl.i = dtType2stFmt(dep->d_type);
                   storeFSName(syncEntities, dep->d_name, dep->d_namlen, &value);
                }
-            }
+
+               else if (dep->d_type == DT_UNKNOWN)    // need to call lstat()
+               {
+                  if (lstat(fullp, &dstat) != -1 &&
+                      ((dstat.st_mode &= S_IFMT) == S_IFDIR || dstat.st_mode == S_IFREG || dstat.st_mode == S_IFLNK))
+                  {
+                     value.pl.i = dstat.st_mode;
+                     storeFSName(syncEntities, dep->d_name, dep->d_namlen, &value);
+                  }
+               }
          }
 
       closedir(ddp);
@@ -980,6 +982,13 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
             // next destination path
             size_t ndl  = dl + sep->d_namlen;   // next destination length
             char  *ndst = strcpy(allocate(ndl+2, false), dst); strcpy(ndst+dl, sep->d_name);
+            if (gExcludeList && findFSName(gExcludeList, ndst, ndl))
+            {
+               if (syncEntities)
+                  removeFSName(syncEntities, sep->d_name, sep->d_namlen);
+               deallocate_batch(false, VPR(nsrc), VPR(ndst), NULL);
+               continue;
+            }
 
             dstat.st_ino = 0;
             if (syncEntities &&                 // only non-NULL in incremental or synchronize mode
@@ -1209,7 +1218,7 @@ void usage(const char *executable)
    while (--r >= executable && *r != '/')
       ;
    r++;
-   printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2015 - %s\n\n", version);
+   printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2017 - %s\n\n", version);
    printf("\
 Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-v level] [-x exclude-list] [-X excl-list-file] [-y] [-h|-?|?] source/ destination/\n\n\
        -c roff|woff|rwoff  Selectively turn off the file system cache for reading or writing\n\
@@ -1419,7 +1428,7 @@ int main(int argc, char *const argv[])
       *(short *)&dst[dl++] = *(short *)"/";
 
    if (gVerbosityLevel)
-      printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2015 - %s\nclone %s %s\n", version, src, dst);
+      printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2017 - %s\nclone %s %s\n", version, src, dst);
 
    // 2. check whether the paths do exist, lead to directories, and make sure that destination is not inherited by source
    bool   dirCreated = false;
