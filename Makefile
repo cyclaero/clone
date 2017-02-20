@@ -37,14 +37,14 @@ SVNREV != cat svnrev.xcconfig
 .endif
 
 .if $(MACHINE) == "i386" || $(MACHINE) == "amd64" || $(MACHINE) == "x86_64"
-CFLAGS = $(CDEFS) -march=native
+CFLAGS = $(CDEFS) -Ofast -ffast-math
 .elif $(MACHINE) == "arm"
-CFLAGS = $(CDEFS) -fsigned-char
+CFLAGS = $(CDEFS) -O3 -fsigned-char
 .else
 CFLAGS = $(CDEFS)
 .endif
 
-CFLAGS += -D$(SVNREV) -g0 -Ofast -std=c11 -fno-common -fstrict-aliasing -Wno-switch -Wno-parentheses
+CFLAGS += -D$(SVNREV) -g0 -std=c11 -fno-common -fstrict-aliasing -Wno-switch -Wno-parentheses
 LDFLAGS = -lpthread
 
 HEADER  = utils.h
