@@ -2,7 +2,7 @@
 //  clone
 //
 //  Created by Dr. Rolf Jansen on 2013-01-13.
-//  Copyright (c) 2013-2017. All rights reserved.
+//  Copyright (c) 2013-2018. All rights reserved.
 //
 //  Redistribution and use in source and binary forms, with or without modification,
 //  are permitted provided that the following conditions are met:
@@ -1218,7 +1218,7 @@ void usage(const char *executable)
    while (--r >= executable && *r != '/')
       ;
    r++;
-   printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2017 - %s\n\n", version);
+   printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2018 - %s\n\n", version);
    printf("\
 Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-v level] [-x exclude-list] [-X excl-list-file] [-y] [-h|-?|?] source/ destination/\n\n\
        -c roff|woff|rwoff  Selectively turn off the file system cache for reading or writing\n\
@@ -1428,7 +1428,7 @@ int main(int argc, char *const argv[])
       *(short *)&dst[dl++] = *(short *)"/";
 
    if (gVerbosityLevel)
-      printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2017 - %s\nclone %s %s\n", version, src, dst);
+      printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2018 - %s\nclone %s %s\n", version, src, dst);
 
    // 2. check whether the paths do exist, lead to directories, and make sure that destination is not inherited by source
    bool   dirCreated = false;
