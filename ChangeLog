@@ -6,7 +6,15 @@ Copyright (c) 2013-2018. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
-•••• 2017-02-19 -- Created a snapshot of r90 for release as v1.0.7, and submitted it to FreeBSD Ports ••••
+2018-11-04 12:15 rj - r81
+
+   * utils.h, clone.c, clone.xcodeproj, Makefile
+     - added facility for Oversize Protection for variable length arrays and alloca().
+     - compile everything with the -fstack-protector flag.
+     - switch to -std=gnu11 and revised the set of compiler options.
+
+
+•••• 2017-02-19 -- Created a snapshot of r80 for release as v1.0.7, and submitted it to FreeBSD Ports ••••
 
 
 2017-02-19 22:18  rj - r80

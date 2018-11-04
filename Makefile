@@ -36,15 +36,16 @@ SVNREV  = SVNREV="$(REVNUM)"
 SVNREV != cat svnrev.xcconfig
 .endif
 
-.if $(MACHINE) == "i386" || $(MACHINE) == "amd64" || $(MACHINE) == "x86_64"
-CFLAGS = $(CDEFS) -Ofast -ffast-math
-.elif $(MACHINE) == "arm"
-CFLAGS = $(CDEFS) -O3 -fsigned-char
+.ifmake debug
+CFLAGS  = $(CDEFS) -g -O0
+STRIP   =
 .else
-CFLAGS = $(CDEFS)
+CFLAGS  = $(CDEFS) -g0 -O3
+STRIP   = -s
 .endif
 
-CFLAGS += -D$(SVNREV) -g0 -std=c11 -fno-common -fstrict-aliasing -Wno-switch -Wno-parentheses
+CFLAGS += -D$(SVNREV) -std=gnu11 -fsigned-char -fno-pic -fvisibility=hidden -fstrict-aliasing -fno-common -fstack-protector \
+          -Wno-switch -Wno-parentheses
 LDFLAGS = -lpthread
 
 HEADER  = utils.h
@@ -66,8 +67,10 @@ $(TOOLOBJ): Makefile
 clean:
 	rm -rf *.o *.core $(TOOL)
 
+debug: all
+
 update: clean all
 
 install: $(TOOL)
-	strip -x -o /usr/local/bin/$(TOOL) $(TOOL)
+	install $(STRIP) $(TOOL) /usr/local/bin/
 	cp $(TOOL).1 /usr/local/man/man1/$(TOOL).1

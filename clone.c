@@ -928,7 +928,7 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
              (dep->d_name[1] != '.' ||  dep->d_name[2] != '\0')))
          {
             size_t fpl = dl+dep->d_namlen;
-            char fullp[fpl+1]; strcpy(fullp, dst); strcpy(fullp+dl, dep->d_name);
+            char fullp[OSP(fpl+1)]; strcpy(fullp, dst); strcpy(fullp+dl, dep->d_name);
             if (!gExcludeList || !findFSName(gExcludeList, dep->d_name, dep->d_namlen) && !findFSName(gExcludeList, fullp, fpl))
                if (dep->d_type == DT_DIR || dep->d_type == DT_REG || dep->d_type == DT_LNK)
                {
@@ -1330,7 +1330,7 @@ int main(int argc, char *const argv[])
             {
                usrhome = getpwuid(getuid())->pw_dir;
                homelen = strlen(usrhome);
-               strcpy(o = alloca(homelen+strlen(optarg)+1), usrhome);
+               strcpy(o = alloca(OSP(homelen+strlen(optarg)+1)), usrhome);
                strcpy(o+homelen, optarg+1);
             }
             else
@@ -1344,8 +1344,8 @@ int main(int argc, char *const argv[])
                   if (!gExcludeList)
                      gExcludeList = createTable(256);
 
-                  p = alloca(exclst.st_size + 1);
-                  if (fread(p, (size_t)exclst.st_size, 1, exclf) == 1)
+                  if ((p = allocate(exclst.st_size + 1, false))
+                   && fread(p, (size_t)exclst.st_size, 1, exclf) == 1)
                   {
                      for (q = p + exclst.st_size - 1; q > p && (*q == '\n' || *q == '\r'); q--);   // strip trailing line breaks
                      if (q > p)
@@ -1362,6 +1362,8 @@ int main(int argc, char *const argv[])
                            p = q;
                         } while (ch);
                      }
+
+                     deallocate(VPR(p), false);
                   }
                }
 
@@ -1404,8 +1406,8 @@ int main(int argc, char *const argv[])
 
    size_t as = strlen(argv[0]), sl = (stilde) ? homelen + as - 1 : as;
    size_t ad = strlen(argv[1]), dl = (dtilde) ? homelen + ad - 1 : ad;
-   char   src[sl+2];
-   char   dst[dl+2];
+   char   src[OSP(sl+2)];
+   char   dst[OSP(dl+2)];
    if (stilde)
    {
       strcpy(src, usrhome);

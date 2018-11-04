@@ -46,6 +46,11 @@ typedef long long          llong;
 typedef unsigned long long ullong;
 
 
+#pragma mark ••• Oversize Protection for variable length arrays and alloca() •••
+#define OSP(cnt) ((cnt <= 4096) ? cnt : (exit(EXIT_FAILURE), 1))
+
+
+#pragma mark ••• Fencing Memory Allocation Wrappers •••
 // void pointer reference
 #define VPR(p) (void **)&(p)
 
