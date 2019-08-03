@@ -51,7 +51,7 @@
 #include "utils.h"
 
 
-static const char *version = "Version 1.0.8 (r"STRINGIFY(SVNREV)")";
+static const char *version = "Version 1.0.8b (r"STRINGIFY(SVNREV)")";
 
 // Device and file system informations
 int   *gSourceFSType;
