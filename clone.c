@@ -2,7 +2,7 @@
 //  clone
 //
 //  Created by Dr. Rolf Jansen on 2013-01-13.
-//  Copyright (c) 2013-2018. All rights reserved.
+//  Copyright (c) 2013-2019. All rights reserved.
 //
 //  Redistribution and use in source and binary forms, with or without modification,
 //  are permitted provided that the following conditions are met:
@@ -51,11 +51,10 @@
 #include "utils.h"
 
 
-static const char *version = "Version 1.0.7 (r"STRINGIFY(SVNREV)")";
+static const char *version = "Version 1.0.8 (r"STRINGIFY(SVNREV)")";
 
 // Device and file system informations
 int   *gSourceFSType;
-bool   gSourceRdOnly;
 dev_t  gSourceDev;
 
 int   *gDestinFSType;
@@ -342,7 +341,7 @@ void setAttributes(int sfd, int dfd, const char *src, const char *dst, struct st
       close(dfd);
 
    lchown(dst, st->st_uid, st->st_gid);
-   lchmod(dst, modperms(st->st_mode));
+   lchmod(dst, st->st_mode&ALLPERMS);
    setTimesFlags(dst, st);
 
    if (gVerbosityLevel >= 2 && !S_ISDIR(st->st_mode))
@@ -457,7 +456,7 @@ void *writer(void *threadArg)
 
       CopyChunk *chunk = qitem->chunk;
 
-      int out = open(qitem->dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, modperms(qitem->st.st_mode));
+      int out = open(qitem->dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, qitem->st.st_mode&ALLPERMS);
       if (out != -1)
       {
          qitem->dfd = out;
@@ -620,7 +619,7 @@ int atomCopy(char *src, char *dst, struct stat *st)
 {
    int in, out;
    if ((in = open(src, O_RDONLY)) != -1)
-      if ((out = open(dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, modperms(st->st_mode))) != -1)
+      if ((out = open(dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, st->st_mode&ALLPERMS)) != -1)
       {
          if (gReadNoCache)
             fnocache(in);
@@ -707,7 +706,7 @@ int hlnkCopy(char *src, char *dst, size_t dl, struct stat *st)
 int fileEmpty(char *src, char *dst, struct stat *st)
 {
    int rc;
-   int out = open(dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, modperms(st->st_mode));
+   int out = open(dst, O_WRONLY|O_CREAT|O_TRUNC|O_EXLOCK, st->st_mode&ALLPERMS);
    if (out != -1)
    {
       setAttributes(-1, out, src, dst, st);
@@ -1220,7 +1219,7 @@ void usage(const char *executable)
    r++;
    printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2018 - %s\n\n", version);
    printf("\
-Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-v level] [-x exclude-list] [-X excl-list-file] [-y] [-h|-?|?] source/ destination/\n\n\
+Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-l] [-v level] [-x exclude-list] [-X excl-list-file] [-y] [-h|-?|?] source/ destination/\n\n\
        -c roff|woff|rwoff  Selectively turn off the file system cache for reading or writing\n\
                            or for reading and writing -- the caches are on by default.\n\n\
        The options -d, -i, -s are mutually exclusive:\n\
@@ -1228,8 +1227,8 @@ Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-v level] [-x exclude-list] [-X excl-
                            remove the destination directory or mount point itself. Stop on error.\n\n\
        -i                  Incrementally add new content to or change content in the destination,\n\
                            but do not touch content in destination that does not exist in source.\n\n\
-       -l                  Don't copy, but create hard links of regular files in the cloned directory tree.\n\n\
        -s                  Completely synchronize destination with source.\n\n\
+       -l                  Don't copy, but create hard links of regular files in the cloned directory tree.\n\n\
        -v level            Verbosity level (default = 1):\n\
                            0 - no output\n\
                            1 - show directory action: + for add, - for delete, = for keep\n\
@@ -1472,7 +1471,6 @@ int main(int argc, char *const argv[])
       struct statfs sfs;
       statfs(src, &sfs);
       gSourceFSType = (int *)sfs.f_fstypename;
-      gSourceRdOnly = sfs.f_flags & MNT_RDONLY;
       gSourceDev    = sstat.st_dev;
 
       struct statfs dfs;

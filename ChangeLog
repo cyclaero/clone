@@ -1,10 +1,17 @@
 This is the ChangeLog of the clone project
 
 Created by Dr. Rolf Jansen on 2013-02-19.
-Copyright (c) 2013-2018. All rights reserved.
+Copyright (c) 2013-2019. All rights reserved.
 
 Note: Milestones are embraced with ••••
 
+
+2019-08-03 09:40 rj - r82
+
+   * utils.h, clone.c, clone.1
+     - fix issue #2, by removing a non-solution for a non-problem
+       (No need to change permissions of clones comming from read only file system).
+     - minor corrections in the man file
 
 2018-11-04 12:15 rj - r81
 
