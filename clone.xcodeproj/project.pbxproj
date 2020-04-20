@@ -24,6 +24,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		7E363D0524291A3A007AE640 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		7E48626F16A345CA008E0F01 /* clone */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = clone; sourceTree = BUILT_PRODUCTS_DIR; };
 		7E48627316A345CA008E0F01 /* clone.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = clone.c; sourceTree = "<group>"; };
 		7E48628416A376FD008E0F01 /* utils.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = utils.c; sourceTree = "<group>"; };
@@ -59,6 +60,7 @@
 				7EDC0F1216D3885F00B6DB4A /* ChangeLog */,
 				7EFCA776216A55FA001A2F07 /* README.md */,
 				7EFCA775216A5550001A2F07 /* LICENSE */,
+				7E363D0524291A3A007AE640 /* .gitignore */,
 				7E48627016A345CA008E0F01 /* Products */,
 			);
 			indentWidth = 3;

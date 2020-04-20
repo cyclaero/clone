@@ -1,10 +1,20 @@
 This is the ChangeLog of the clone project
 
 Created by Dr. Rolf Jansen on 2013-02-19.
-Copyright (c) 2013-2019. All rights reserved.
+Copyright (c) 2013-2020. All rights reserved.
 
 Note: Milestones are embraced with ••••
 
+
+•••• 2020-04-20 -- Created a snapshot of r83 for release as v1.0.8, and submitted it to FreeBSD Ports ••••
+
+
+2020-04-20 22:35 rj - r83
+
+   * all files
+     - prepared release v1.0.8
+     - bumped copyright dates
+     - added xcshareddata to .gitignore
 
 2019-08-03 09:40 rj - r82
 

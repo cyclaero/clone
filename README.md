@@ -10,7 +10,7 @@ attributes and access control lists.
 clone is useful for cloning (thus backing-up) live file systems, and it can
 also be used in incremental and synchronization mode.
 
-clone works on FreeBSD and Mac OS X.
+clone works on FreeBSD and macOS.
 
 clone is very fast, for example, cloning a whole UFS2 file hierarchy on
 FreeBSD 9.1 of in total 2.3 TBytes of data from one hard disk to another
