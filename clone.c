@@ -51,7 +51,7 @@
 #include "utils.h"
 
 
-static const char *version = "Version 1.0.8 (r"STRINGIFY(SVNREV)")";
+static const char *version = "Version 1.0.9b (r"STRINGIFY(SVNREV)")";
 
 // Device and file system informations
 int   *gSourceFSType;
@@ -668,7 +668,7 @@ int atomCopy(char *src, char *dst, struct stat *st)
 
 int hlnkCopy(char *src, char *dst, size_t dl, struct stat *st)
 {
-   int   rc;
+   int rc;
 
    if (!gHardLinking)
    {
@@ -895,7 +895,7 @@ int deleteEntityTree(Node *syncNode, const char *path, size_t pl)
 
    size_t npl   = pl + strlen(syncNode->name);
    char  *npath = strcpy(allocate(npl+2, false), path); strcpy(npath+pl, syncNode->name);
-      rc = deleteDirEntity(npath, npl, syncNode->value.pl.i);
+   rc = deleteDirEntity(npath, npl, syncNode->value.pl.i);
 
    deallocate_batch(false, VPR(npath), VPR(syncNode->name), VPR(syncNode), NULL);
    return (rcL != NO_ERROR)
@@ -1217,7 +1217,7 @@ void usage(const char *executable)
    while (--r >= executable && *r != '/')
       ;
    r++;
-   printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2018 - %s\n\n", version);
+   printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2020 - %s\n\n", version);
    printf("\
 Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-l] [-v level] [-x exclude-list] [-X excl-list-file] [-y] [-h|-?|?] source/ destination/\n\n\
        -c roff|woff|rwoff  Selectively turn off the file system cache for reading or writing\n\
@@ -1429,7 +1429,7 @@ int main(int argc, char *const argv[])
       *(short *)&dst[dl++] = *(short *)"/";
 
    if (gVerbosityLevel)
-      printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2018 - %s\nclone %s %s\n", version, src, dst);
+      printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2020 - %s\nclone %s %s\n", version, src, dst);
 
    // 2. check whether the paths do exist, lead to directories, and make sure that destination is not inherited by source
    bool   dirCreated = false;
