@@ -2,3 +2,6 @@
 xcshareddata
 xcuserdata
 *.xcworkspace
+*.o
+*.core
+clone

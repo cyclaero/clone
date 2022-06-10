@@ -2,7 +2,7 @@
 //  clone
 //
 //  Created by Dr. Rolf Jansen on 2013-01-13.
-//  Copyright (c) 2013-2020. All rights reserved.
+//  Copyright (c) 2013-2022. All rights reserved.
 //
 //  Redistribution and use in source and binary forms, with or without modification,
 //  are permitted provided that the following conditions are met:
@@ -51,7 +51,7 @@
 #include "utils.h"
 
 
-static const char *version = "Version 1.0.9b (r"STRINGIFY(SVNREV)")";
+static const char *version = "Version 1.0.9b (r"STRINGIFY(SCMREV)")";
 
 // Device and file system informations
 int   *gSourceFSType;
@@ -906,6 +906,24 @@ int deleteEntityTree(Node *syncNode, const char *path, size_t pl)
 }
 
 
+char *pickextension(char *name, int *naml)
+{
+   int l;
+   for (l = *naml-1; l > 0 && name[l] != '.'; l--);
+
+   if (0 < l && l < *naml-1)
+   {
+      *naml -= l;
+      return name+l;
+   }
+
+   else
+   {
+      *naml = 0;
+      return NULL;
+   }
+}
+
 void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *st)
 {
    static char    errorString[errStrLen];
@@ -928,7 +946,12 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
          {
             size_t fpl = dl+dep->d_namlen;
             char fullp[OSP(fpl+1)]; strcpy(fullp, dst); strcpy(fullp+dl, dep->d_name);
-            if (!gExcludeList || !findFSName(gExcludeList, dep->d_name, dep->d_namlen) && !findFSName(gExcludeList, fullp, fpl))
+            int   extl = (int)dep->d_namlen;
+            char *fext = pickextension(dep->d_name, &extl);
+            if (!gExcludeList
+             || !findFSName(gExcludeList, dep->d_name, dep->d_namlen)
+             && !findFSName(gExcludeList, fullp, fpl)
+             && !findFSName(gExcludeList, fext, extl))
                if (dep->d_type == DT_DIR || dep->d_type == DT_REG || dep->d_type == DT_LNK)
                {
                   value.pl.i = dtType2stFmt(dep->d_type);
@@ -960,7 +983,11 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
          if ( sep->d_name[0] != '.' || (sep->d_name[1] != '\0' &&
              (sep->d_name[1] != '.' ||  sep->d_name[2] != '\0')))
          {
-            if (gExcludeList && findFSName(gExcludeList, sep->d_name, sep->d_namlen))
+            int   extl = (int)sep->d_namlen;
+            char *fext = pickextension(sep->d_name, &extl);
+            if (gExcludeList
+             && (findFSName(gExcludeList, sep->d_name, sep->d_namlen)
+              || findFSName(gExcludeList, fext, extl)))
             {
                if (syncEntities)
                   removeFSName(syncEntities, sep->d_name, sep->d_namlen);
@@ -970,7 +997,8 @@ void clone(const char *src, size_t sl, const char *dst, size_t dl, struct stat *
             // next source path
             size_t nsl  = sl + sep->d_namlen;   // next source length
             char  *nsrc = strcpy(allocate(nsl+2, false), src); strcpy(nsrc+sl, sep->d_name);
-            if (gExcludeList && findFSName(gExcludeList, nsrc, nsl) || lstat(nsrc, &sstat) != NO_ERROR)
+            if (gExcludeList && findFSName(gExcludeList, nsrc, nsl)
+             || lstat(nsrc, &sstat) != NO_ERROR)
             {
                if (syncEntities)
                   removeFSName(syncEntities, sep->d_name, sep->d_namlen);
@@ -1217,7 +1245,7 @@ void usage(const char *executable)
    while (--r >= executable && *r != '/')
       ;
    r++;
-   printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2020 - %s\n\n", version);
+   printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2022 - %s\n\n", version);
    printf("\
 Usage: %s [-c roff|woff|rwoff] [-d|-i|-s] [-l] [-v level] [-x exclude-list] [-X excl-list-file] [-y] [-h|-?|?] source/ destination/\n\n\
        -c roff|woff|rwoff  Selectively turn off the file system cache for reading or writing\n\
@@ -1319,7 +1347,11 @@ int main(int argc, char *const argv[])
                   q++;
                *q++ = '\0';
                if (*p)
+               {
+                  if (*p == '*')
+                     p++;
                   storeFSName(gExcludeList, p, strlen(p), NULL);
+               }
                p = q;
             } while (ch);
             break;
@@ -1357,7 +1389,11 @@ int main(int argc, char *const argv[])
                               q++;
                            *q++ = '\0';
                            if (*p)
+                           {
+                              if (*p == '*')
+                                 p++;
                               storeFSName(gExcludeList, p, strlen(p), NULL);
+                           }
                            p = q;
                         } while (ch);
                      }
@@ -1429,7 +1465,7 @@ int main(int argc, char *const argv[])
       *(short *)&dst[dl++] = *(short *)"/";
 
    if (gVerbosityLevel)
-      printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2020 - %s\nclone %s %s\n", version, src, dst);
+      printf("File tree cloning by Dr. Rolf Jansen (c) 2013-2022 - %s\nclone %s %s\n", version, src, dst);
 
    // 2. check whether the paths do exist, lead to directories, and make sure that destination is not inherited by source
    bool   dirCreated = false;

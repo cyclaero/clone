@@ -1,7 +1,7 @@
 # Makefile for clone(1)
 #
 # Created by Dr. Rolf Jansen on 2013-01-13.
-# Copyright (c) 2013-2020. All rights reserved.
+# Copyright (c) 2013-2022. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -25,15 +25,21 @@
 
 CC ?= clang
 
-.if exists(.svn)
+.if exists(.git)
 .ifmake update
-REVNUM != svn update > /dev/null; svnversion
+COMCNT != git pull origin >/dev/null 2>&1; git rev-list --count HEAD
 .else
-REVNUM != svnversion
+COMCNT != git rev-list --count HEAD
 .endif
-SVNREV  = SVNREV="$(REVNUM)"
+REVNUM != echo $(COMCNT) + 1 | bc
+MODCNT != git status -s | wc -l
+.if $(MODCNT) > 0
+MODIED  = m
 .else
-SVNREV != cat svnrev.xcconfig
+MODIED  =
+.endif
+.else
+REVNUM != cut -d= -f2 scmrev.xcconfig
 .endif
 
 .ifmake debug
@@ -44,7 +50,7 @@ CFLAGS  = $(CDEFS) -g0 -O3
 STRIP   = -s
 .endif
 
-CFLAGS += -D$(SVNREV) -std=gnu11 -fsigned-char -fno-pic -fvisibility=hidden -fstrict-aliasing -fno-common -fstack-protector \
+CFLAGS += -DSCMREV="$(REVNUM)$(MODIED)" -std=gnu11 -fsigned-char -fno-pic -fvisibility=hidden -fstrict-aliasing -fno-common -fstack-protector \
           -Wno-switch -Wno-parentheses
 LDFLAGS = -lpthread
 

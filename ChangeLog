@@ -1,10 +1,26 @@
 This is the ChangeLog of the clone project
 
 Created by Dr. Rolf Jansen on 2013-02-19.
-Copyright (c) 2013-2020. All rights reserved.
+Copyright (c) 2013-2022. All rights reserved.
 
 Note: Milestones are embraced with ••••
 
+
+2022-06-10 11:13 rj - r87
+
+   * all files
+     - now file extensions may be added to the exclude lists
+     - updated copyright dates
+     - fixed release number based on the actual count of GIT's rev-list + 1
+     - renamed SVNREV to SCMREV
+     - added binary products to .gitignore
+
+2020-06-26 12:08 rj - r84
+
+   * all files
+     - bumped version number to 1.0.9b
+     - updated copyright dates
+     - formatting
 
 •••• 2020-04-20 -- Created a snapshot of r83 for release as v1.0.8, and submitted it to FreeBSD Ports ••••
 

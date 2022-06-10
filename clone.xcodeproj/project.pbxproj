@@ -30,7 +30,7 @@
 		7E48628416A376FD008E0F01 /* utils.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = utils.c; sourceTree = "<group>"; };
 		7E48628616A37741008E0F01 /* utils.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.h; fileEncoding = 4; path = utils.h; sourceTree = "<group>"; };
 		7E67492716BDC167009036B2 /* clone.1 */ = {isa = PBXFileReference; explicitFileType = text.man; lineEnding = 0; path = clone.1; sourceTree = "<group>"; };
-		7ED7608C16AD6325000A566D /* svnrev.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = svnrev.xcconfig; sourceTree = "<group>"; };
+		7ED7608C16AD6325000A566D /* scmrev.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = scmrev.xcconfig; sourceTree = "<group>"; };
 		7ED760A316AD6A02000A566D /* Makefile */ = {isa = PBXFileReference; explicitFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; usesTabs = 1; };
 		7EDC0F1216D3885F00B6DB4A /* ChangeLog */ = {isa = PBXFileReference; lastKnownFileType = text; path = ChangeLog; sourceTree = "<group>"; };
 		7EFCA775216A5550001A2F07 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
@@ -56,7 +56,7 @@
 				7E48627316A345CA008E0F01 /* clone.c */,
 				7E67492716BDC167009036B2 /* clone.1 */,
 				7ED760A316AD6A02000A566D /* Makefile */,
-				7ED7608C16AD6325000A566D /* svnrev.xcconfig */,
+				7ED7608C16AD6325000A566D /* scmrev.xcconfig */,
 				7EDC0F1216D3885F00B6DB4A /* ChangeLog */,
 				7EFCA776216A55FA001A2F07 /* README.md */,
 				7EFCA775216A5550001A2F07 /* LICENSE */,
@@ -110,6 +110,7 @@
 			developmentRegion = English;
 			hasScannedForEncodings = 0;
 			knownRegions = (
+				English,
 				en,
 			);
 			mainGroup = 7E48626416A345CA008E0F01;
@@ -137,7 +138,7 @@
 /* Begin XCBuildConfiguration section */
 		7E48627716A345CA008E0F01 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 7ED7608C16AD6325000A566D /* svnrev.xcconfig */;
+			baseConfigurationReference = 7ED7608C16AD6325000A566D /* scmrev.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_WARN_BOOL_CONVERSION = YES;
@@ -171,7 +172,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 10.6.8;
 				ONLY_ACTIVE_ARCH = YES;
 				OTHER_CFLAGS = (
-					"-DSVNREV=$(SVNREV)",
+					"-DSCMREV=$(SCMREV)",
 					"-fstack-protector",
 				);
 				STRIP_INSTALLED_PRODUCT = NO;
@@ -180,7 +181,7 @@
 		};
 		7E48627816A345CA008E0F01 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 7ED7608C16AD6325000A566D /* svnrev.xcconfig */;
+			baseConfigurationReference = 7ED7608C16AD6325000A566D /* scmrev.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_WARN_BOOL_CONVERSION = YES;
@@ -209,7 +210,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 10.6.8;
 				OTHER_CFLAGS = (
-					"-DSVNREV=$(SVNREV)",
+					"-DSCMREV=$(SCMREV)",
 					"-fstack-protector",
 				);
 			};
