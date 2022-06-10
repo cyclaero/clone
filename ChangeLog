@@ -6,6 +6,11 @@ Copyright (c) 2013-2022. All rights reserved.
 Note: Milestones are embraced with ••••
 
 
+2022-06-10 11:45 rj - r88
+
+   * scmrev.xcconfig
+     - remove the quotation marks from the release number
+
 2022-06-10 11:13 rj - r87
 
    * all files
@@ -21,6 +26,7 @@ Note: Milestones are embraced with ••••
      - bumped version number to 1.0.9b
      - updated copyright dates
      - formatting
+
 
 •••• 2020-04-20 -- Created a snapshot of r83 for release as v1.0.8, and submitted it to FreeBSD Ports ••••
 
